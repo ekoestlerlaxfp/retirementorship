@@ -1,0 +1,157 @@
+{
+  "app_name": "RetireMentorship",
+  "personality": "1 iOS-Native Clean (Structure) + warm Headspace-like colors + MasterClass layout",
+  "personality_one_liner": "A welcoming, premium, Apple-quality content hub that uses warm tans, golds, and deep purple to educate older adults on retirement.",
+  "color": {
+    "surface": "#FAF8F5",
+    "onSurface": "#231F20",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#231F20",
+    "surfaceTertiary": "#F0E6D2",
+    "onSurfaceTertiary": "#231F20",
+    "surfaceInverse": "#231F20",
+    "onSurfaceInverse": "#FAF8F5",
+    "brand": "#C5A059",
+    "brandPrimary": "#C5A059",
+    "onBrandPrimary": "#231F20",
+    "brandSecondary": "#4B3166",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#E4D0AB",
+    "onBrandTertiary": "#231F20",
+    "success": "#356646",
+    "onSuccess": "#FFFFFF",
+    "warning": "#B06935",
+    "onWarning": "#FFFFFF",
+    "error": "#A83C3C",
+    "onError": "#FFFFFF",
+    "border": "#E5DFD3",
+    "borderStrong": "#C5A059",
+    "divider": "#E5DFD3"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 14,
+      "base": 17,
+      "lg": 20,
+      "xl": 24,
+      "2xl": 32
+    }
+  },
+  "spacing": {
+    "rule": "Ensure ample breathing room and hitSlop for accessibility. 48pt minimum touch target size. Avoid dense dashboard grids.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": true,
+    "do_s": [
+      "Use on bottom tab bar for native feel",
+      "Use on sticky header backgrounds over scrolling content",
+      "Use on hero cards with a photo background"
+    ],
+    "dont_s": [
+      "Do not use on body text regions",
+      "Do not use if it compromises accessibility/contrast for older users"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home",
+      "purpose": "A curated, Apple News-style personalized feed presenting multiple content rails.",
+      "states": {
+        "loading": "Centered spinner or skeleton loader for rails.",
+        "empty": "Illustration with 'No new content yet' and a CTA to 'Explore Library'.",
+        "error": "Error message indicating failed feed load with 'Retry' button."
+      },
+      "layout": "Vertical scroll with multiple horizontal carousels (rails). Use a large, immersive hero tile for 'Featured Book' or 'Today\\'s Tip' with a gradient scrim and text overlay. Subsequent rails ('Continue Reading', 'Latest Articles') use smaller, cleanly spaced cards with warm white backgrounds against the cream surface. Header is sticky with glassmorphism."
+    },
+    {
+      "name": "Learn",
+      "purpose": "Category browser styled like MasterClass library for discovering specialized topics.",
+      "states": {
+        "loading": "Skeleton grids.",
+        "empty": "Illustration with 'Categories unavailable'.",
+        "error": "Error message with 'Retry' button."
+      },
+      "layout": "Tabbed or pill-filtered content-type differentiation model. Use large immersive tiles for primary topics (e.g., Retirement Planning, Taxes) and compact tiles for sub-topics. Focus on strong hierarchy, minimal text, and high-quality imagery."
+    },
+    {
+      "name": "ArticleReader",
+      "purpose": "Distraction-free reading experience prioritizing accessibility and legibility.",
+      "states": {
+        "loading": "Skeleton text lines.",
+        "empty": "N/A",
+        "error": "Error fetching article with 'Retry' button."
+      },
+      "layout": "Editorial-style vertical scroll. Massive, high-contrast title, large body copy (17pt+), generous line-height (1.5x). Prominent contextual actions at the top or bottom for Bookmarking and Sharing. Include a 'Reading Time' meta tag."
+    },
+    {
+      "name": "Profile",
+      "purpose": "User management, bookmarks, and the primary lead-generation CTA.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "List-based settings interface. Top section prominently features the 'Talk to an advisor' Calendly CTA card, styled as a premium banner (using the Deep Purple/Gold gradient background) to make it stand out elegantly without feeling intrusive. Below are standard list rows for Bookmarks, Downloads, and Reading History."
+    }
+  ],
+  "images": {
+    "home_hero": {
+      "url": "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxNYXN0ZXJjbGFzcyUyMHN0eWxlJTIwZXhwZXJ0JTIwdGFsa2luZyUyMGluJTIwc3R1ZGlvJTIwd2FybSUyMGxpZ2h0aW5nfGVufDB8fHx8MTc4NzE2NzM3M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Expert talking in studio with warm lighting"
+    },
+    "retirement_lifestyle": {
+      "url": "https://images.unsplash.com/photo-1783253708577-5d657876fb6b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxSZXRpcmVtZW50JTIwbGlmZXN0eWxlJTIwb2xkZXIlMjBjb3VwbGUlMjB3YWxraW5nJTIwb24lMjBiZWFjaHxlbnwwfHx8fDE3ODcxNjczNzN8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Older couple walking on the beach"
+    },
+    "advisor_meeting": {
+      "url": "https://images.unsplash.com/photo-1758518727707-b023e285b709?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwxfHxMdXh1cnklMjBmaW5hbmNpYWwlMjBhZHZpc29yJTIwbWVldGluZyUyMGluJTIwbW9kZXJuJTIwb2ZmaWNlfGVufDB8fHx8MTc4NzE2NzM3M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Professionals in modern office meeting space"
+    },
+    "tax_calculator": {
+      "url": "https://images.unsplash.com/photo-1625225233840-695456021cde?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwxfHxUYXglMjBkb2N1bWVudCUyMG9yJTIwY2FsY3VsYXRvciUyMGRlc2slMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzg3MTY3MzczfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Tax document and calculator desk aesthetic"
+    },
+    "purple_gold_abstract": {
+      "url": "https://images.unsplash.com/photo-1686593686409-43456910d65c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwxfHxBYnN0cmFjdCUyMGdvbGQlMjBhbmQlMjBkZWVwJTIwcHVycGxlJTIwZWxlZ2FudCUyMHRleHR1cmV8ZW58MHx8fHwxNzg3MTY3MzczfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract gold and deep purple elegant texture"
+    }
+  },
+  "instructions_to_main_agent": [
+    "ACCESSIBILITY IS CRITICAL: Ensure all typography uses the specified scale (minimum base 17pt) and all touch targets are at least 48x48pt.",
+    "Use the Deep Purple color (#4B3166) strictly for depth elements (headers, gradients, key CTAs like the Calendly lead gen) and never as a primary background for standard content.",
+    "Implement the 'gradient scrim' pattern for any text overlaid on images (e.g., Hero cards, Featured Books) to ensure WCAG AA contrast compliance.",
+    "Maintain the 'MasterClass' / 'Apple News' visual hierarchy: prioritize clean, large typography, immersive hero tiles, and multiple curated horizontal rails on the Home screen.",
+    "Ensure 'Talk to an advisor' feels premium and native (using the abstract purple/gold texture as a background for its card), avoiding an intrusive 'ad' feel.",
+    "Include high contrast on the Gold (#C5A059) accents by pairing them carefully with Charcoal Text (#231F20)."
+  ]
+}
