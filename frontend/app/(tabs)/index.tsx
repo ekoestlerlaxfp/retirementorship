@@ -6,11 +6,37 @@ import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, stages, BRAND } from "@/src/theme";
-import { api, type HomeFeed } from "@/src/api/client";
+import { api, cachedApi, type HomeFeed } from "@/src/api/client";
 import { HeroCard, ArticleCard, TrendingCard, TipCard, Rail } from "@/src/components/cards";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { CenteredLoader, Muted, EmptyState } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
+import { progress as progressStore, type ProgressEntry } from "@/src/offline";
+import { Image as ExpoImage } from "expo-image";
+
+function ContinueCard({ entry }: { entry: ProgressEntry }) {
+  return (
+    <Pressable
+      testID={`continue-card-${entry.post_id}`}
+      onPress={() => router.push({ pathname: "/article/[id]", params: { id: String(entry.post_id) } })}
+      style={({ pressed }) => [{ width: 280 }, pressed && { opacity: 0.9 }]}
+    >
+      <View style={{ height: 160, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surfaceTertiary, marginBottom: spacing.md }}>
+        {entry.image ? (
+          <ExpoImage source={{ uri: entry.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+        ) : null}
+        <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 4, backgroundColor: "rgba(255,255,255,0.35)" }}>
+          <View style={{ width: `${Math.max(6, Math.round(entry.progress * 100))}%`, height: "100%", backgroundColor: colors.brandPrimary }} />
+        </View>
+      </View>
+      {entry.category ? <Text style={{ color: colors.brandPrimary, fontWeight: "800", letterSpacing: 0.8, fontSize: 11, marginBottom: 4 }}>{entry.category.toUpperCase()}</Text> : null}
+      <Text style={{ fontSize: 16, fontWeight: "700", color: colors.onSurface, lineHeight: 22 }} numberOfLines={3}>{entry.title}</Text>
+      <Text style={{ fontSize: 13, color: colors.muted, fontWeight: "500", marginTop: 4 }}>
+        {Math.round(entry.progress * 100)}% read
+      </Text>
+    </Pressable>
+  );
+}
 
 export default function Home() {
   const insets = useSafeAreaInsets();
@@ -18,20 +44,22 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
+  const [continueReading, setContinueReading] = useState<ProgressEntry[]>([]);
   const { user } = useAuth();
 
   const load = useCallback(async () => {
-    try {
-      const s = await AsyncStorage.getItem("rm_stage");
-      setStage(s);
-      const f = await api.homeFeed(s);
-      setFeed(f);
-    } catch (e) {
-      console.warn("feed load", e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    const s = await AsyncStorage.getItem("rm_stage");
+    setStage(s);
+    // Cache-first, then refresh
+    await cachedApi.homeFeed(s, {
+      onCache: (cached) => {
+        if (cached) { setFeed(cached); setLoading(false); }
+      },
+      onFresh: (fresh) => { setFeed(fresh); setLoading(false); setRefreshing(false); },
+      onError: () => { setLoading(false); setRefreshing(false); },
+    });
+    // Continue Reading rail (local progress)
+    setContinueReading(await progressStore.recent(6));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -92,6 +120,18 @@ export default function Home() {
           <View style={{ marginBottom: spacing["2xl"] }}>
             <TipCard post={feed.tip} />
           </View>
+        )}
+
+        {continueReading.length > 0 && (
+          <Rail
+            testID="rail-continue"
+            title="Continue reading"
+            subtitle="Pick up where you left off"
+            data={continueReading}
+            renderItem={(p) => (
+              <ContinueCard entry={p} />
+            )}
+          />
         )}
 
         <Rail

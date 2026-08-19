@@ -172,6 +172,59 @@ class TestAuthGuards:
         assert r.status_code == 401, r.text
 
 
+# ---- `modified` field presence (offline layer version tracking) ----
+class TestModifiedField:
+    def test_single_post_15919_has_modified(self, api_client):
+        # Retry once with 10s sleep on empty due to WP rate limits
+        r = None
+        for attempt in range(2):
+            r = api_client.get(f"{API}/wp/posts/15919", timeout=30)
+            if r.status_code == 200 and r.json().get("id") == 15919:
+                break
+            time.sleep(10)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body.get("id") == 15919, f"expected id 15919, got {body.get('id')}"
+        assert "modified" in body, "missing `modified` key"
+        assert body["modified"] is not None, "`modified` is null"
+        assert isinstance(body["modified"], str) and len(body["modified"]) > 0
+        # ISO-ish sanity check
+        assert "T" in body["modified"], f"modified not ISO-like: {body['modified']}"
+
+    def test_home_feed_hero_and_latest_include_modified(self, api_client):
+        r = None
+        for attempt in range(2):
+            r = api_client.get(f"{API}/wp/home-feed", timeout=30)
+            if r.status_code == 200 and (r.json() or {}).get("latest"):
+                break
+            time.sleep(10)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        hero = body.get("hero")
+        assert hero is not None, "hero is None"
+        assert "modified" in hero and hero["modified"], f"hero missing modified: {hero.get('modified')}"
+        latest = body.get("latest") or []
+        assert latest, "latest empty"
+        for i, p in enumerate(latest):
+            assert "modified" in p, f"latest[{i}] missing modified key"
+            assert p["modified"], f"latest[{i}] modified is empty/null"
+
+    def test_search_medicare_returns_results(self, api_client):
+        # Retry once with sleep because search may 429
+        posts = []
+        for attempt in range(2):
+            r = api_client.get(f"{API}/wp/posts", params={"search": "medicare"}, timeout=45)
+            assert r.status_code == 200, r.text
+            posts = r.json()
+            if isinstance(posts, list) and len(posts) >= 1:
+                break
+            time.sleep(10)
+        assert isinstance(posts, list), "search response not a list"
+        assert len(posts) >= 1, f"expected >=1 result for 'medicare', got {len(posts)}"
+        p = posts[0]
+        assert "id" in p and "title" in p
+
+
 # ---- HTML entity decoding (unit-style via API) ----
 class TestHtmlDecoding:
     def test_titles_look_natural(self, api_client):

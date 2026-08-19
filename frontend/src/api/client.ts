@@ -10,6 +10,7 @@ export type WPPost = {
   excerpt: string;
   content_html: string;
   date: string;
+  modified?: string;
   link: string;
   image?: string;
   image_alt?: string;
@@ -115,3 +116,72 @@ export const api = {
   addHistory: (h: { post_id: number; title: string; image?: string; category?: string; type?: string; progress?: number }) =>
     req("/user/history", { method: "POST", body: JSON.stringify(h) }),
 };
+
+// -------- Cached wrappers (cache-first + background revalidate) --------
+import { cache } from "../offline/cache";
+
+const K = {
+  homeFeed: (stage?: string | null) => `home-feed:${stage || "any"}`,
+  categories: () => "categories",
+  post: (id: number) => `post:${id}`,
+  category: (id: number) => `category:${id}`,
+};
+
+export const cachedApi = {
+  homeFeed(
+    stage: string | null | undefined,
+    handlers: {
+      onCache?: (data: HomeFeed | null, savedAt: number | null) => void;
+      onFresh?: (data: HomeFeed) => void;
+      onError?: (e: unknown) => void;
+    } = {}
+  ) {
+    return cache.staleWhileRevalidate<HomeFeed>(
+      K.homeFeed(stage),
+      () => api.homeFeed(stage),
+      handlers
+    );
+  },
+  categories(handlers: { onCache?: (d: CategoryT[] | null) => void; onFresh?: (d: CategoryT[]) => void } = {}) {
+    return cache.staleWhileRevalidate<CategoryT[]>(K.categories(), () => api.categories(), {
+      onCache: (d) => handlers.onCache?.(d),
+      onFresh: (d) => handlers.onFresh?.(d),
+    });
+  },
+  post(
+    id: number,
+    handlers: {
+      onCache?: (data: WPPost | null, savedAt: number | null) => void;
+      onFresh?: (data: WPPost) => void;
+      onError?: (e: unknown) => void;
+    } = {}
+  ) {
+    return cache.staleWhileRevalidate<WPPost>(
+      K.post(id),
+      () => api.post(id),
+      {
+        ...handlers,
+        onFresh: (fresh) => {
+          handlers.onFresh?.(fresh);
+          // Compare versions and note if content changed
+          // (consumer already sees new content via onFresh)
+        },
+      }
+    );
+  },
+  category(
+    id: number,
+    handlers: {
+      onCache?: (data: WPPost[] | null) => void;
+      onFresh?: (data: WPPost[]) => void;
+    } = {}
+  ) {
+    return cache.staleWhileRevalidate<WPPost[]>(
+      K.category(id),
+      () => api.posts({ category: id, per_page: 20 }),
+      handlers
+    );
+  },
+};
+
+export const cacheKeys = K;

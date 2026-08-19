@@ -117,6 +117,7 @@ def transform_post(p: dict) -> dict:
         "excerpt": excerpt,
         "content_html": content_html,
         "date": p.get("date"),
+        "modified": p.get("modified"),
         "link": p.get("link"),
         "image": featured.get("source_url"),
         "image_alt": featured.get("alt_text") or title,

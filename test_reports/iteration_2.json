@@ -1,0 +1,31 @@
+{
+  "summary": "Backend regression + new `modified` field verification for RetireMentorship offline-layer iteration. All 16 pytest cases passed (16/16, 100%). Verified: (1) GET /api/wp/posts/15919 returns non-null ISO `modified` string; (2) GET /api/wp/home-feed exposes `modified` on hero and every post in `latest`; (3) search=medicare returns >=1 post (retry-once logic effective); (4) categories, home-feed shape (hero/latest/videos/trending/tip), posts?category=<id>, in-process caching, HTML entity decoding, and all 401 auth guards (bogus session, missing header on /auth/me and /user/bookmarks, bad bearer token) still intact. No regressions detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py wp_get() fallback branch at line ~65 has a fragile heuristic (`path.endswith(tuple(f'/{i}' for i in range(10)))`) to decide dict-vs-list default. Only reliable when post_id ends in 0-9; safer to pass an explicit `default` argument or infer from response shape. Not a regression, but brittle for /posts/{id} when id ends elsewhere (n/a for numeric ids, so no runtime impact here).",
+    "transform_post assumes p is a dict; a WP 404 for /posts/{id} returns {'code':'rest_post_invalid_id',...} which would still be transformed as if a post (id/title None). Consider a guard to return 404 to client when WP returns error dict."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/backend_test.py (pytest, 16 cases). BASE_URL comes from EXPO_PUBLIC_BACKEND_URL env with fallback to public preview URL. WP is rate-limited (429) — tests include one 10s retry where relevant. The `modified` field must remain in transform_post output for offline-layer version tracking.",
+  "rca_of_issue": "N/A — no failures."
+}

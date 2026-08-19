@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { View, StyleSheet, ScrollView, Text, Pressable, useWindowDimensions, Share } from "react-native";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { View, StyleSheet, ScrollView, Text, Pressable, useWindowDimensions, Share, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,10 +8,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import WebView from "react-native-webview";
 import RenderHtml from "react-native-render-html";
 import { colors, spacing, radius, type as typo } from "@/src/theme";
-import { api, WPPost } from "@/src/api/client";
+import { api, cachedApi, WPPost } from "@/src/api/client";
 import { CenteredLoader, GoldPill, Muted } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { useAuth } from "@/src/context/auth";
+import { progress as progressStore, downloads } from "@/src/offline";
 
 function extractYoutubeId(html: string): string | null {
   const m1 = html.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/);
@@ -28,16 +29,35 @@ export default function ArticleScreen() {
   const { width } = useWindowDimensions();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [post, setPost] = useState<WPPost | null>(null);
+  const [fromCache, setFromCache] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
   const { user } = useAuth();
+  const lastProgressSaved = useRef(0);
 
   useEffect(() => {
     if (!id) return;
-    api.post(Number(id)).then((p) => {
-      setPost(p);
+    const pid = Number(id);
+    cachedApi.post(pid, {
+      onCache: (cached) => {
+        if (cached) { setPost(cached); setFromCache(true); }
+      },
+      onFresh: (fresh) => { setPost(fresh); setFromCache(false); },
+    }).then((p) => {
+      if (!p) return;
+      // Seed reading progress + history
+      progressStore.set({
+        post_id: p.id,
+        progress: 0.05,
+        title: p.title,
+        image: p.image,
+        category: p.category?.name,
+        type: p.type,
+      });
+      downloads.get(`article-${p.id}`).then((d) => setDownloaded(!!d));
       if (user) {
         api.addHistory({
-          post_id: p.id, title: p.title, image: p.image, category: p.category?.name, type: p.type, progress: 0.1,
+          post_id: p.id, title: p.title, image: p.image, category: p.category?.name, type: p.type, progress: 0.05,
         }).catch(() => {});
         api.bookmarkIds().then((ids) => setBookmarked(ids.includes(p.id))).catch(() => {});
       }
@@ -65,15 +85,68 @@ export default function ArticleScreen() {
     try { await Share.share({ message: `${post.title} — ${post.link}`, url: post.link, title: post.title }); } catch {}
   }, [post]);
 
-  if (!post) return <View style={styles.root}><CenteredLoader /></View>;
+  const toggleOffline = useCallback(async () => {
+    if (!post) return;
+    const id = `article-${post.id}`;
+    if (downloaded) {
+      await downloads.remove(id);
+      setDownloaded(false);
+      return;
+    }
+    // Article JSON is already in the cache. If a cover exists, persist it via expo-file-system.
+    if (post.image) {
+      await downloads.start({
+        id,
+        kind: "article",
+        post_id: post.id,
+        title: post.title,
+        cover: post.image,
+        remote_url: post.image,
+        version: post.modified || null,
+      });
+    } else {
+      // No binary — mark as ready with no local file
+      await downloads.start({
+        id,
+        kind: "article",
+        post_id: post.id,
+        title: post.title,
+        cover: null,
+        remote_url: post.link,
+        version: post.modified || null,
+      });
+    }
+    setDownloaded(true);
+  }, [post, downloaded]);
+
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!post) return;
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const denom = Math.max(1, contentSize.height - layoutMeasurement.height);
+    const p = Math.min(1, Math.max(0, contentOffset.y / denom));
+    const now = Date.now();
+    if (now - lastProgressSaved.current < 1500) return; // throttle
+    lastProgressSaved.current = now;
+    progressStore.set({
+      post_id: post.id, progress: p, title: post.title, image: post.image,
+      category: post.category?.name, type: post.type,
+    });
+    if (user) {
+      api.addHistory({
+        post_id: post.id, title: post.title, image: post.image, category: post.category?.name, type: post.type, progress: p,
+      }).catch(() => {});
+    }
+  }, [post, user]);
 
   const htmlSource = useMemo(() => {
-    // Strip YouTube/Vimeo embeds from HTML (we render them separately as a proper player)
+    if (!post) return { html: "" };
     let html = post.content_html;
     html = html.replace(/<figure[^>]*wp-block-embed[^>]*>[\s\S]*?<\/figure>/gi, "");
     html = html.replace(/<iframe[\s\S]*?<\/iframe>/gi, "");
     return { html };
   }, [post]);
+
+  if (!post) return <View style={styles.root}><CenteredLoader /></View>;
 
   return (
     <View style={styles.root}>
@@ -82,6 +155,13 @@ export default function ArticleScreen() {
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
         </Pressable>
         <View style={{ flex: 1 }} />
+        <Pressable testID="article-offline" onPress={toggleOffline} style={styles.iconBtn} hitSlop={12}>
+          <Ionicons
+            name={downloaded ? "cloud-done" : "cloud-download-outline"}
+            size={20}
+            color={downloaded ? colors.brandPrimary : colors.onSurface}
+          />
+        </Pressable>
         <Pressable testID="article-share" onPress={onShare} style={styles.iconBtn} hitSlop={12}>
           <Ionicons name="share-outline" size={20} color={colors.onSurface} />
         </Pressable>
@@ -94,7 +174,12 @@ export default function ArticleScreen() {
         </Pressable>
       </SafeAreaView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing["3xl"] }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: spacing["3xl"] }}
+        onScroll={onScroll}
+        scrollEventThrottle={200}
+      >
         {youtubeId ? (
           <View style={styles.videoWrap}>
             <WebView
@@ -113,7 +198,15 @@ export default function ArticleScreen() {
         ) : null}
 
         <View style={styles.body}>
-          {post.category && <GoldPill label={post.category.name} testID="article-category" />}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
+            {post.category && <GoldPill label={post.category.name} testID="article-category" />}
+            {fromCache && (
+              <View style={styles.offlinePill} testID="article-offline-pill">
+                <Ionicons name="cloud-offline-outline" size={12} color={colors.brandSecondary} />
+                <Text style={styles.offlinePillText}>Saved offline</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.title} testID="article-title">{post.title}</Text>
           <View style={styles.metaRow}>
             <Ionicons name="time-outline" size={16} color={colors.muted} />
@@ -191,4 +284,16 @@ const styles = StyleSheet.create({
     fontStyle: "italic", opacity: 0.85, marginTop: spacing.lg,
   },
   divider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.xl },
+  offlinePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.surfaceTertiary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  offlinePillText: { color: colors.brandSecondary, fontSize: 11, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
 });

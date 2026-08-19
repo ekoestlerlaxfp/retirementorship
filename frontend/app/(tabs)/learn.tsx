@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, shadow } from "@/src/theme";
-import { api, CategoryT } from "@/src/api/client";
+import { api, cachedApi, CategoryT } from "@/src/api/client";
 import { CenteredLoader, EmptyState, H1, Muted } from "@/src/components/ui";
 
 const CATEGORY_ART: Record<string, string> = {
@@ -45,7 +45,11 @@ function artFor(slug: string) {
 export default function Learn() {
   const [cats, setCats] = useState<CategoryT[] | null>(null);
   useEffect(() => {
-    api.categories().then(setCats).catch(() => setCats([]));
+    cachedApi.categories({
+      onCache: (d) => { if (d) setCats(d); },
+      onFresh: (d) => setCats(d),
+    }).then((d) => { if (d && !cats) setCats(d); }).catch(() => setCats([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!cats) return <View style={styles.root}><CenteredLoader /></View>;

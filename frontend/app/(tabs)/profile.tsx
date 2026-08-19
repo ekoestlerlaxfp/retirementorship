@@ -24,6 +24,7 @@ export default function Profile() {
   const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; testID: string }[] = [
     { icon: "bookmark-outline", label: "My bookmarks", onPress: () => router.push("/(tabs)/library"), testID: "profile-bookmarks" },
     { icon: "time-outline", label: "Reading history", onPress: () => router.push("/(tabs)/library"), testID: "profile-history" },
+    { icon: "cloud-download-outline", label: "Downloads & storage", onPress: () => router.push("/downloads"), testID: "profile-downloads" },
     { icon: "school-outline", label: "Browse topics", onPress: () => router.push("/(tabs)/learn"), testID: "profile-topics" },
     { icon: "options-outline", label: "Update retirement stage", onPress: () => router.push("/onboarding"), testID: "profile-stage" },
   ];

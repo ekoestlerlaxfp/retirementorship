@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { colors, spacing, radius } from "@/src/theme";
-import { api, WPPost } from "@/src/api/client";
+import { api, cachedApi, WPPost } from "@/src/api/client";
 import { ArticleCard } from "@/src/components/cards";
 import { CenteredLoader, EmptyState, Muted } from "@/src/components/ui";
 
@@ -14,7 +14,11 @@ export default function CategoryScreen() {
 
   useEffect(() => {
     if (!id) return;
-    api.posts({ category: Number(id), per_page: 20 }).then(setPosts).catch(() => setPosts([]));
+    cachedApi.category(Number(id), {
+      onCache: (d) => { if (d) setPosts(d); },
+      onFresh: (d) => setPosts(d),
+    }).then((d) => { if (d && !posts) setPosts(d); }).catch(() => setPosts([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   return (
