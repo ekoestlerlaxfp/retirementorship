@@ -26,6 +26,7 @@ export type HomeFeed = {
   latest: WPPost[];
   videos: WPPost[];
   trending: WPPost[];
+  recommended: WPPost[];
   tip: WPPost | null;
   stage?: string | null;
 };
@@ -126,8 +127,14 @@ export const api = {
     return req<WPPost[]>(`/wp/posts?${q.toString()}`);
   },
   post: (id: number) => req<WPPost>(`/wp/posts/${id}`),
-  homeFeed: (stage?: string | null) =>
-    req<HomeFeed>(`/wp/home-feed${stage ? `?stage=${stage}` : ""}`),
+  homeFeed: (params: { stage?: string | null; exclude_ids?: string; interest_cat?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.stage) q.set("stage", params.stage);
+    if (params.exclude_ids) q.set("exclude_ids", params.exclude_ids);
+    if (params.interest_cat) q.set("interest_cat", String(params.interest_cat));
+    const qs = q.toString();
+    return req<HomeFeed>(`/wp/home-feed${qs ? `?${qs}` : ""}`);
+  },
 
   // User
   onboarding: (retirement_stage: string) =>
@@ -172,11 +179,13 @@ export const cachedApi = {
       onCache?: (data: HomeFeed | null, savedAt: number | null) => void;
       onFresh?: (data: HomeFeed) => void;
       onError?: (e: unknown) => void;
-    } = {}
+    } = {},
+    opts: { exclude_ids?: string; interest_cat?: number } = {}
   ) {
+    const keySuffix = `${opts.exclude_ids ? `:x=${opts.exclude_ids.slice(0, 40)}` : ""}${opts.interest_cat ? `:c=${opts.interest_cat}` : ""}`;
     return cache.staleWhileRevalidate<HomeFeed>(
-      K.homeFeed(stage),
-      () => api.homeFeed(stage),
+      K.homeFeed(stage) + keySuffix,
+      () => api.homeFeed({ stage, exclude_ids: opts.exclude_ids, interest_cat: opts.interest_cat }),
       handlers
     );
   },

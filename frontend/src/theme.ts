@@ -81,7 +81,7 @@ export const stages = [
   { id: "retired", label: "Already retired", subtitle: "Living it well" },
 ] as const;
 
-export const CALENDLY_URL = "https://calendly.com/retirementorship/intro";
+export const CALENDLY_URL = "https://calendly.com/flinde/discovery";
 
 export const BRAND = {
   name: "RetireMentorship",

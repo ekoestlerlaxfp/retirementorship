@@ -32,22 +32,6 @@ const TOOLS = [
     url: "https://retirementorship.com/mortgage-calculator/",
     available: true,
   },
-  {
-    id: "rmd",
-    name: "RMD Estimator",
-    subtitle: "Required Minimum Distributions.",
-    icon: "cash" as const,
-    url: "",
-    available: false,
-  },
-  {
-    id: "roth",
-    name: "Roth Conversion Planner",
-    subtitle: "Model conversion strategies.",
-    icon: "swap-horizontal" as const,
-    url: "",
-    available: false,
-  },
 ];
 
 export default function Tools() {

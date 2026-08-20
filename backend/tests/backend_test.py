@@ -376,3 +376,153 @@ class TestAdminLeads:
         expected = "email,name,retirement_stage,created_at,last_login,user_id,picture,source"
         assert first_line.strip() == expected, \
             f"CSV header mismatch. expected={expected!r} got={first_line!r}"
+
+
+# ---- Iteration 5: home-feed refactor (recommended rail + cross-rail dedupe) ----
+def _fetch_home_feed(api_client, params=None):
+    """Fetch home-feed with a 1-retry-after-5s on empty (WP rate limit)."""
+    r = None
+    for attempt in range(2):
+        r = api_client.get(f"{API}/wp/home-feed", params=params or {}, timeout=45)
+        if r.status_code == 200:
+            body = r.json() or {}
+            if body.get("hero") or body.get("latest"):
+                return body, r
+        time.sleep(5)
+    assert r is not None and r.status_code == 200, (r.text if r is not None else "no response")
+    return r.json(), r
+
+
+class TestHomeFeedIter5:
+    """New shape: keys = hero, featured, latest, videos, trending, recommended, tip, stage.
+    Cross-rail dedupe: hero.id, tip.id, and every id in videos/trending/recommended must be disjoint."""
+
+    def test_home_feed_has_all_iter5_keys(self, api_client):
+        body, _ = _fetch_home_feed(api_client)
+        for key in ("hero", "featured", "latest", "videos", "trending", "recommended", "tip", "stage"):
+            assert key in body, f"home-feed missing key: {key}"
+        assert isinstance(body["videos"], list)
+        assert isinstance(body["trending"], list)
+        assert isinstance(body["recommended"], list)
+        assert isinstance(body["latest"], list)
+        assert isinstance(body["featured"], list)
+
+    def test_home_feed_cross_rail_dedupe(self, api_client):
+        body, _ = _fetch_home_feed(api_client)
+        hero = body.get("hero")
+        tip = body.get("tip")
+        assert hero and hero.get("id"), "hero missing"
+        assert tip and tip.get("id"), "tip missing"
+
+        video_ids = [v["id"] for v in body["videos"]]
+        trending_ids = [t["id"] for t in body["trending"]]
+        recommended_ids = [r["id"] for r in body["recommended"]]
+
+        # Rails must have unique ids within themselves
+        assert len(video_ids) == len(set(video_ids)), f"videos rail has dup ids: {video_ids}"
+        assert len(trending_ids) == len(set(trending_ids)), f"trending rail has dup ids: {trending_ids}"
+        assert len(recommended_ids) == len(set(recommended_ids)), f"recommended rail has dup ids: {recommended_ids}"
+
+        # Mutually disjoint across rails + hero + tip
+        all_ids = [hero["id"], tip["id"]] + video_ids + trending_ids + recommended_ids
+        assert len(all_ids) == len(set(all_ids)), (
+            f"cross-rail duplicates found. hero={hero['id']} tip={tip['id']} "
+            f"videos={video_ids} trending={trending_ids} recommended={recommended_ids}"
+        )
+
+    def test_home_feed_tip_is_article_when_available(self, api_client):
+        body, _ = _fetch_home_feed(api_client)
+        latest = body.get("latest") or []
+        hero_id = (body.get("hero") or {}).get("id")
+        # Check whether any non-hero article exists in top 20 latest
+        # (latest is truncated to 10 in response, but tip selection uses the full 20 upstream —
+        #  since we only see the top 10 here, use that as a lower bound sufficient signal)
+        non_hero_articles = [p for p in latest if p.get("id") != hero_id and p.get("type") == "article"]
+        if non_hero_articles:
+            tip = body.get("tip")
+            assert tip and tip.get("type") == "article", (
+                f"tip should be 'article' when non-hero articles exist. got type={tip.get('type') if tip else None}"
+            )
+        else:
+            pytest.skip("no non-hero articles visible in latest[:10] to assert tip.type")
+
+    def test_home_feed_exclude_ids_removes_hero_and_shifts(self, api_client):
+        body1, _ = _fetch_home_feed(api_client)
+        hero1 = body1.get("hero")
+        assert hero1 and hero1.get("id"), "first-call hero missing"
+        excluded = hero1["id"]
+
+        body2, _ = _fetch_home_feed(api_client, params={"exclude_ids": str(excluded)})
+        hero2 = body2.get("hero")
+        assert hero2 is not None, "second-call hero is None after exclude_ids"
+
+        # Excluded id must not appear anywhere in the response
+        appears_in = []
+        if hero2.get("id") == excluded:
+            appears_in.append("hero")
+        tip2 = body2.get("tip") or {}
+        if tip2.get("id") == excluded:
+            appears_in.append("tip")
+        for rail in ("videos", "trending", "recommended"):
+            for item in body2.get(rail) or []:
+                if item.get("id") == excluded:
+                    appears_in.append(rail)
+                    break
+        assert not appears_in, (
+            f"excluded id {excluded} still present in: {appears_in} on second call"
+        )
+
+        # Hero should be different (WP site has hundreds of posts)
+        assert hero2["id"] != excluded, (
+            f"hero did not shift after excluding {excluded}; got {hero2['id']}"
+        )
+
+    def test_home_feed_interest_cat_biases_recommended(self, api_client, categories):
+        if not categories:
+            pytest.skip("no categories available")
+        # pick a category with a healthy count
+        cat = next((c for c in categories if c.get("count", 0) >= 3), categories[0])
+        cat_id = cat["id"]
+
+        body = None
+        for attempt in range(2):
+            r = api_client.get(
+                f"{API}/wp/home-feed",
+                params={"interest_cat": cat_id},
+                timeout=45,
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            if body.get("recommended"):
+                break
+            time.sleep(5)
+
+        recommended = body.get("recommended") or []
+        assert len(recommended) > 0, f"recommended empty for interest_cat={cat_id} ({cat.get('name')})"
+
+        # NOTE: the API transform only exposes ONE category from `_embed` (the first-embedded term),
+        # which is often not the requested filter category since posts belong to multiple cats.
+        # To validate the interest filter, we hit WP directly and confirm the recommended ids
+        # are actually a subset of posts that carry the requested category.
+        rec_ids = {r["id"] for r in recommended}
+        wp_direct = requests.get(
+            "https://retirementorship.com/wp-json/wp/v2/posts",
+            params={"include": ",".join(str(i) for i in rec_ids), "per_page": len(rec_ids)},
+            timeout=30,
+        )
+        if wp_direct.status_code == 200:
+            wp_posts = wp_direct.json()
+            matched = [p for p in wp_posts if cat_id in (p.get("categories") or [])]
+            ratio = len(matched) / max(len(wp_posts), 1)
+            assert ratio >= 0.5, (
+                f"expected >=50% of recommended items to actually be in interest_cat={cat_id}, "
+                f"got {len(matched)}/{len(wp_posts)} = {ratio:.0%}"
+            )
+        else:
+            # Fall back to soft check on exposed category
+            with_cat = [r for r in recommended if (r.get("category") or {}).get("id")]
+            if with_cat:
+                matched = [r for r in with_cat if (r.get("category") or {}).get("id") == cat_id]
+                assert len(matched) >= 1, (
+                    f"none of {len(with_cat)} recommended items expose interest_cat={cat_id}"
+                )

@@ -325,27 +325,89 @@ async def wp_post(post_id: int):
 
 
 @api_router.get("/wp/home-feed")
-async def wp_home_feed(stage: Optional[str] = None):
-    async def latest():
-        return await wp_get("/posts", {"per_page": 10, "_embed": 1, "orderby": "date", "order": "desc"})
-
-    latest_data = await latest()
-    if isinstance(latest_data, Exception) or not isinstance(latest_data, list):
+async def wp_home_feed(
+    stage: Optional[str] = None,
+    exclude_ids: Optional[str] = None,
+    interest_cat: Optional[int] = None,
+):
+    """Home feed with cross-rail de-duplication.
+    - hero: latest post
+    - tip: 2nd latest (never duplicates hero)
+    - videos: newest posts with video embeds, excluding hero
+    - trending: mid-slice of latest, excluding hero/videos
+    - recommended: page-2 posts filtered by interest_cat + exclude_ids (viewing history)
+    """
+    latest_data = await wp_get(
+        "/posts",
+        {"per_page": 20, "_embed": 1, "orderby": "date", "order": "desc"},
+    )
+    if not isinstance(latest_data, list):
         latest_data = []
-
     latest_posts = [transform_post(p) for p in latest_data]
-    featured_posts = latest_posts[:5]
-    video_posts = [p for p in latest_posts if p["type"] == "video"][:8]
-    # Trending = a shuffled-ish subset of latest (WP comment_count not always available)
-    trending_posts = (latest_posts[5:13] if len(latest_posts) > 5 else latest_posts)[:8]
-    tip = latest_posts[0] if latest_posts else None
+
+    exclude_set = set()
+    if exclude_ids:
+        for tok in exclude_ids.split(","):
+            tok = tok.strip()
+            if tok.isdigit():
+                exclude_set.add(int(tok))
+
+    # Hero = the newest post the user hasn't already engaged with.
+    hero = next((p for p in latest_posts if p["id"] not in exclude_set), None)
+    if hero:
+        exclude_set.add(hero["id"])
+
+    tip = None
+    for p in latest_posts[1:]:
+        if p["id"] not in exclude_set and p["type"] == "article":
+            tip = p
+            exclude_set.add(p["id"])
+            break
+    if not tip:
+        for p in latest_posts[1:]:
+            if p["id"] not in exclude_set:
+                tip = p
+                exclude_set.add(p["id"])
+                break
+
+    videos = []
+    for p in latest_posts:
+        if p["type"] == "video" and p["id"] not in exclude_set:
+            videos.append(p)
+            if len(videos) >= 8:
+                break
+    for v in videos:
+        exclude_set.add(v["id"])
+
+    trending = [p for p in latest_posts if p["id"] not in exclude_set][:8]
+    for t in trending:
+        exclude_set.add(t["id"])
+
+    # Recommended = deeper picks, biased to user interest.
+    rec_params: Dict[str, Any] = {"per_page": 12, "_embed": 1, "orderby": "date", "order": "desc"}
+    if interest_cat:
+        rec_params["categories"] = interest_cat
+    else:
+        rec_params["page"] = 2  # go one page deeper into WP's archive for freshness without duplication
+    rec_data = await wp_get("/posts", rec_params, ttl=180)
+    if not isinstance(rec_data, list):
+        rec_data = []
+    recommended = [transform_post(p) for p in rec_data if isinstance(p, dict) and p.get("id") not in exclude_set][:8]
+    # If still empty (interest_cat had nothing new), fall back to page 2 raw
+    if not recommended and interest_cat:
+        rec_params.pop("categories", None)
+        rec_params["page"] = 2
+        rec_data = await wp_get("/posts", rec_params, ttl=180)
+        if isinstance(rec_data, list):
+            recommended = [transform_post(p) for p in rec_data if isinstance(p, dict) and p.get("id") not in exclude_set][:8]
 
     return {
-        "hero": featured_posts[0] if featured_posts else None,
-        "featured": featured_posts,
-        "latest": latest_posts,
-        "videos": video_posts,
-        "trending": trending_posts,
+        "hero": hero,
+        "featured": [hero] if hero else [],
+        "latest": latest_posts[:10],  # kept for backwards-compat; not rendered on Home anymore
+        "videos": videos,
+        "trending": trending,
+        "recommended": recommended,
         "tip": tip,
         "stage": stage,
     }

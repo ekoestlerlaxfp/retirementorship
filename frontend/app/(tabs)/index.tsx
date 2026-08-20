@@ -67,6 +67,11 @@ export default function Home() {
     const s = await AsyncStorage.getItem("rm_stage");
     setStage(s);
     setSyncing(true);
+
+    // Compute viewing-history hints for smarter recommendations
+    const recentProgress = await progressStore.list();
+    const excludeIds = recentProgress.slice(0, 15).map((p) => p.post_id).join(",") || undefined;
+
     // Cache-first, then refresh from WordPress (source of truth)
     await cachedApi.homeFeed(s, {
       onCache: (cached, savedAt) => {
@@ -80,7 +85,8 @@ export default function Home() {
         setSyncing(false);
       },
       onError: () => { setLoading(false); setRefreshing(false); setSyncing(false); },
-    });
+    }, { exclude_ids: excludeIds });
+
     // Content rails
     cachedApi.books({
       onCache: (d) => { if (d) setBooks(d); },
@@ -189,22 +195,12 @@ export default function Home() {
         )}
 
         <Rail
-          testID="rail-latest"
-          title="Latest articles"
-          subtitle="Fresh from the desk of your mentors"
-          data={feed.latest}
+          testID="rail-videos"
+          title="Watch & learn"
+          subtitle="Short, focused video lessons"
+          data={feed.videos}
           renderItem={(p) => <ArticleCard post={p} />}
         />
-
-        {feed.videos?.length > 0 && (
-          <Rail
-            testID="rail-videos"
-            title="Watch & learn"
-            subtitle="Short, focused video lessons"
-            data={feed.videos}
-            renderItem={(p) => <ArticleCard post={p} />}
-          />
-        )}
 
         {feed.trending?.length > 0 && (
           <Rail
@@ -232,8 +228,8 @@ export default function Home() {
         <Rail
           testID="rail-recommended"
           title="Recommended for you"
-          subtitle={stage ? "Chosen for your stage" : "Popular picks"}
-          data={feed.featured}
+          subtitle={stage ? "Chosen for your stage" : "Deeper picks from the archive"}
+          data={feed.recommended || []}
           renderItem={(p) => <ArticleCard post={p} />}
         />
       </ScrollView>

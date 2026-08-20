@@ -1,0 +1,55 @@
+{
+  "summary": "RetireMentorship iteration-5 backend verification (home-feed refactor with `recommended` rail + cross-rail dedupe + exclude_ids + interest_cat). Added TestHomeFeedIter5 with 5 new pytest cases. Results: 27 passed, 3 skipped, 3 failed. NEW ITER-5 COVERAGE: shape (all 8 keys hero/featured/latest/videos/trending/recommended/tip/stage) PASS; cross-rail mutual-disjoint dedupe (hero.id, tip.id, videos[], trending[], recommended[]) PASS — verified live: hero=15919, tip=14672, videos=[15896,15887,15879,15862,15835,15795,15633,15575], trending=[15339,...,14601], recommended=[14550,...,14352], all disjoint; tip==article SKIPPED (visible latest[:10] had no non-hero articles this run); exclude_ids hero-shift FAILED — CRITICAL BUG: hero.id remains 15919 on second call with exclude_ids=15919 (backend bug); interest_cat non-empty recommendation SKIPPED because /wp/categories was 429-empty this session (WP rate limit). Independently reproduced interest_cat live: recommended is non-empty and WP direct-lookup confirms the returned ids ARE in requested cat, but the API transform exposes only ONE embedded category so posts appear to mismatch — this is a transform limitation, not a filter bug. REGRESSIONS: /api/books returns 2 seeded books PASS, /api/magazines returns [] PASS, /api/videos?limit=5 returns items with type==video PASS, /api/wp/latest-modified returns non-null ISO + int id PASS, /api/admin/leads gating with X-Admin-Key=rm_admin_ChangeMe_2026 PASS (401 without/wrong key, 200 with correct). Transient WP-upstream failures: /wp/categories intermittently 429-empty, /wp/posts/{id} returned 500 once (WP infra). Both endpoints returned 200 when called directly minutes earlier.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/wp/home-feed?exclude_ids=<id>",
+        "issue": "The `exclude_ids` query param does NOT exclude the hero. server.py:355 picks `hero = latest_posts[0]` unconditionally, then adds hero.id to exclude_set. So on the second call passing the previous hero id, WP cache returns the same latest ordering, hero is still latest_posts[0] (the excluded id), and the excluded id appears in the response as hero AND in featured=[hero]. Spec says: 'the excluded id must NOT appear anywhere in the response' and 'the hero should now be a DIFFERENT id'. Live-reproduced against wisdom-edge.preview: call1 hero=15919 → call2 with exclude_ids=15919 → hero still 15919. Fix: `hero = next((p for p in latest_posts if p['id'] not in exclude_set), None)` (build exclude_set before selecting hero).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/wp/home-feed?interest_cat=<cat_id>",
+        "issue": "Backend correctly forwards `categories=<id>` to WP so filtering works upstream, but our transform_post() only exposes ONE embedded category (the first-embedded term from `_embed`). Many posts belong to 5-10 categories; e.g., post 14550 has categories [710696136,710696123,710696124,710696147,710696125,...] and while it IS in the requested 710696125, the exposed `category` field shows 710696136 (Behavior). Client-side matching by `category.id` will look broken. Recommend either (a) exposing a `categories: [ids]` array on transformed posts, or (b) reordering embedded so that the requested filter category appears first when interest_cat is set. Not blocking — filter itself is correct."
+      },
+      {
+        "endpoint": "GET /api/wp/home-feed (recommended fallback)",
+        "issue": "When interest_cat has few remaining posts after exclude_set is applied, server.py falls back to `page=2` without categories — meaning recommendations lose the interest bias entirely instead of pulling more from that category with a page bump. Consider fetching page=2 WITH categories still set before dropping the filter."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX (CRITICAL): server.py wp_home_feed() hero selection must respect exclude_ids. Replace `hero = latest_posts[0] if latest_posts else None` with a filtered next() call that skips ids in exclude_set. Same care for tip is already correct.",
+    "OPTIONAL: expose full `categories: [ids]` array on transformed posts so client-side interest matching is verifiable (also aids the interest_cat soft-check).",
+    "OPTIONAL: when recommendation fallback triggers (recommended empty w/ interest_cat), keep categories filter and increase page before dropping it.",
+    "OPTIONAL: transform_post() should guard against WP error-dict responses (`{'code':'rest_post_invalid_id',...}`) — currently a bad single-post fetch returns 200 with null fields (surfaced today as one flaky 500 on /api/wp/posts/{id})."
+  ],
+  "critical_code_review_comments": [
+    "server.py:355 — hero picked before exclude_set applied → root cause of exclude_ids failure. Move exclude_set construction to before hero selection.",
+    "server.py:391-401 — recommendation fallback drops interest_cat entirely instead of paginating within the category. Loses the personalization signal.",
+    "server.py transform_post():91-131 — only exposes first-embedded category; makes /api/wp/home-feed?interest_cat=X look wrong even when it's right. Add `categories: [int]` to output.",
+    "server.py:340-343 — latest_posts fetched with per_page=20 but response only returns latest[:10]. Tip selection uses the full 20 (good), but any client-side dedupe logic against `latest` will only see 10 items and could re-fetch already-shown posts. Consider either exposing latest[:20] or documenting the truncation.",
+    "server.py wp_get() TTL=180s means exclude_ids test only sees post-processing effects; if WP truly rotates during the 3-min window the cache would mask it. Fine for now but the exclude_ids fix must be pure post-processing (it already is).",
+    "server.py:394 — recommendation dedupe uses `exclude_set` which grows through hero/tip/videos/trending. Good. But recommended does not update exclude_set further — if a future rail were added it could dup with recommended. Add `for r in recommended: exclude_set.add(r['id'])` for future-proofing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "82% (27/33 executed, 3 transient/skipped, 3 fails of which 1 is a real bug and 2 are WP-upstream flakes)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "None — reused hardcoded BOOK_FALLBACK and live WP data.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/backend_test.py (33 cases; iter-5 additions in class TestHomeFeedIter5). BASE via EXPO_PUBLIC_BACKEND_URL (currently https://wisdom-edge.preview.emergentagent.com). Run WITHOUT xdist to avoid tripling WP 429s: `python -m pytest backend/tests/backend_test.py -v -o addopts='' --junitxml=/app/test_reports/pytest/pytest_results.xml`. If a WP-dependent test is flaky, retry after 30-60s pause — the in-process cache (CACHE_TTL=180s in server.py) will serve stable data once warmed. AFTER the exclude_ids hero fix ships, retest TestHomeFeedIter5.test_home_feed_exclude_ids_removes_hero_and_shifts specifically. The interest_cat test currently pings retirementorship.com directly as ground-truth for category membership because our API transform exposes only one embedded category; if main agent adds a `categories: [ids]` array to transform_post(), simplify the test to check that array.",
+  "rca_of_issue": "REPRO: (1) curl BASE/api/wp/home-feed → note hero.id (e.g., 15919). (2) curl 'BASE/api/wp/home-feed?exclude_ids=15919' → observe hero.id is STILL 15919, featured=[hero] also 15919. ROOT CAUSE: server.py wp_home_feed() builds exclude_set from the query param AFTER assigning `hero = latest_posts[0]`. The order should be: parse exclude_ids → construct exclude_set → pick hero = first latest post NOT in exclude_set → add hero.id to exclude_set → continue with tip/videos/trending as today. MITIGATION: 3-line change in server.py lines 348-357 to reorder and filter. Coincidentally will also fix any future test where exclude_ids intersects the top-of-feed."
+}

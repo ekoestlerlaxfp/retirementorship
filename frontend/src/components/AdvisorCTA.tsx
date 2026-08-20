@@ -31,7 +31,7 @@ export function AdvisorCTA({ compact = false, testID = "advisor-cta" }: { compac
           Bring your questions. Get answers from a fiduciary planner — no pressure, no sales pitch.
         </Text>
         <View style={styles.cta}>
-          <Text style={styles.ctaText}>Book a free intro call</Text>
+          <Text style={styles.ctaText}>Book a discovery meeting</Text>
           <Ionicons name="arrow-forward" size={18} color={colors.brandPrimary} />
         </View>
       </View>
