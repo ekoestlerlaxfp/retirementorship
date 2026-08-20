@@ -87,20 +87,24 @@ export function MagazineCover({
         ) : (
           <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
         )}
-        <LinearGradient colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.65)"]} style={[StyleSheet.absoluteFillObject, { pointerEvents: "none" as any }]} />
-        <View style={[styles.textWrap, { pointerEvents: "none" as any }]}>
-          <View style={[styles.rule, { backgroundColor: accent, width: 32 }]} />
-          <Text style={styles.title} numberOfLines={3}>{mag.title}</Text>
-          {mag.subtitle ? (
-            <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 4, letterSpacing: 0.3 }} numberOfLines={2}>
-              {mag.subtitle}
-            </Text>
-          ) : null}
-        </View>
-        <View style={[styles.magStamp, { pointerEvents: "none" as any }]}>
-          <Ionicons name="newspaper" size={12} color="#FFF" />
-          <Text style={styles.magStampText}>{label}</Text>
-        </View>
+        {!mag.image ? (
+          <>
+            <LinearGradient colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.65)"]} style={[StyleSheet.absoluteFillObject, { pointerEvents: "none" as any }]} />
+            <View style={[styles.textWrap, { pointerEvents: "none" as any }]}>
+              <View style={[styles.rule, { backgroundColor: accent, width: 32 }]} />
+              <Text style={styles.title} numberOfLines={3}>{mag.title}</Text>
+              {mag.subtitle ? (
+                <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 4, letterSpacing: 0.3 }} numberOfLines={2}>
+                  {mag.subtitle}
+                </Text>
+              ) : null}
+            </View>
+            <View style={[styles.magStamp, { pointerEvents: "none" as any }]}>
+              <Ionicons name="newspaper" size={12} color="#FFF" />
+              <Text style={styles.magStampText}>{label}</Text>
+            </View>
+          </>
+        ) : null}
       </View>
     </Pressable>
   );
