@@ -8,9 +8,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing, type as typo, CALENDLY_URL } from "@/src/theme";
 import { api, cachedApi, type BookT } from "@/src/api/client";
 import { BookCover } from "@/src/components/BookCover";
-import { CenteredLoader, GoldPill, Muted, PrimaryButton, SecondaryButton } from "@/src/components/ui";
+import { CenteredLoader, CompletePill, GoldPill, Muted, PrimaryButton, SecondaryButton } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
-import { bookProgress, type BookProgress, downloads, formatBytes } from "@/src/offline";
+import { bookProgress, type BookProgress, downloads, formatBytes, useCompleted } from "@/src/offline";
 import { useAuth } from "@/src/context/auth";
 import { Linking } from "react-native";
 
@@ -21,6 +21,7 @@ export default function BookScreen() {
   const [downloaded, setDownloaded] = useState<{ ready: boolean; bytes: number } | null>(null);
   const [bookmarked, setBookmarked] = useState(false);
   const { user } = useAuth();
+  const { isComplete, markComplete, unmarkComplete } = useCompleted();
 
   const refresh = useCallback(async (bookId: string) => {
     const p = await bookProgress.get(bookId);
@@ -83,6 +84,26 @@ export default function BookScreen() {
     } catch {}
   }, [book, bookmarked, user]);
 
+  const onToggleComplete = useCallback(async () => {
+    if (!book) return;
+    if (!user) { router.push("/(auth)/login"); return; }
+    const kind = String(book.id).startsWith("mag-") ? "magazine" : "book";
+    const idStr = String(book.id);
+    try {
+      if (isComplete(idStr)) {
+        await unmarkComplete(idStr);
+      } else {
+        await markComplete({
+          post_id: idStr,
+          title: book.title,
+          image: book.image || book.hero_image || null,
+          category: book.author || null,
+          type: kind,
+        });
+      }
+    } catch {}
+  }, [book, user, isComplete, markComplete, unmarkComplete]);
+
   if (!book) return <View style={styles.root}><CenteredLoader /></View>;
 
   const grad = (book.cover_gradient && book.cover_gradient.length >= 2 ? book.cover_gradient : ["#4B3166", "#7A5B99"]) as any;
@@ -131,7 +152,10 @@ export default function BookScreen() {
         </View>
 
         <View style={styles.body}>
-          <GoldPill label={String(book.id).startsWith("mag-") ? "Magazine" : "Book"} testID="book-badge" />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
+            <GoldPill label={String(book.id).startsWith("mag-") ? "Magazine" : "Book"} testID="book-badge" />
+            {isComplete(String(book.id)) ? <CompletePill testID="book-complete-pill" /> : null}
+          </View>
           <Text style={styles.title} testID="book-title">{book.title}</Text>
           {book.subtitle ? <Text style={styles.subtitle}>{book.subtitle}</Text> : null}
           {book.author ? <Text style={styles.author}>By {book.author}</Text> : null}
@@ -185,6 +209,12 @@ export default function BookScreen() {
               </View>
             )}
             <SecondaryButton testID="book-talk" label="Talk to a mentor about this" onPress={onTalk} icon="chatbubble-ellipses" />
+            <SecondaryButton
+              testID="book-complete"
+              label={isComplete(String(book.id)) ? "Marked complete — tap to undo" : "Mark as complete"}
+              onPress={onToggleComplete}
+              icon={isComplete(String(book.id)) ? "checkmark-done" : "checkmark-circle-outline"}
+            />
           </View>
         </View>
 

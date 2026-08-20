@@ -82,6 +82,13 @@ export const GoldPill = ({ label, testID }: { label: string; testID?: string }) 
   </View>
 );
 
+export const CompletePill = ({ testID, compact = false }: { testID?: string; compact?: boolean }) => (
+  <View testID={testID} style={[styles.completePill, compact && { paddingVertical: 3, paddingHorizontal: 8 }]}>
+    <Ionicons name="checkmark-circle" size={compact ? 12 : 14} color="#FFF" />
+    <Text style={[styles.completePillText, compact && { fontSize: 10 }]}>COMPLETE</Text>
+  </View>
+);
+
 export const EmptyState = ({
   icon = "sparkles-outline",
   title,
@@ -193,6 +200,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   goldPillText: { color: colors.onBrandTertiary, fontSize: 12, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+  completePill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.success || "#2E7D5B",
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+  },
+  completePillText: { color: "#FFF", fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
   empty: { alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing["3xl"] },
   emptyIconWrap: {
     width: 72,

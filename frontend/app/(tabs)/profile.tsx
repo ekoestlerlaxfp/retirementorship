@@ -32,6 +32,12 @@ export default function Profile() {
     { icon: "cloud-download-outline", label: "Downloads & storage", onPress: () => router.push("/downloads"), testID: "profile-downloads" },
     { icon: "school-outline", label: "Browse topics", onPress: () => router.push("/(tabs)/learn"), testID: "profile-topics" },
     { icon: "options-outline", label: "Update retirement stage", onPress: () => router.push("/onboarding"), testID: "profile-stage" },
+    {
+      icon: "chatbubbles-outline",
+      label: "Ask us a question",
+      onPress: () => router.push(user ? "/feedback" : "/(auth)/login"),
+      testID: "profile-feedback",
+    },
   ];
 
   return (

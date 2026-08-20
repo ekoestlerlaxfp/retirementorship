@@ -6,7 +6,7 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api/client";
-import { H1, Muted, EmptyState, PrimaryButton, SecondaryButton } from "@/src/components/ui";
+import { H1, Muted, EmptyState, PrimaryButton, SecondaryButton, CompletePill } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
 
 type Tab = "bookmarks" | "history";
@@ -103,9 +103,14 @@ export default function Library() {
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.rowCat}>{typeLabel}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+                    <Text style={styles.rowCat}>{typeLabel}</Text>
+                    {(it.completed || (typeof it.progress === "number" && it.progress >= 0.99)) ? (
+                      <CompletePill compact testID={`library-complete-${it.post_id}`} />
+                    ) : null}
+                  </View>
                   <Text style={styles.rowTitle} numberOfLines={3}>{it.title}</Text>
-                  {tab === "history" && typeof it.progress === "number" && it.progress > 0.02 ? (
+                  {tab === "history" && typeof it.progress === "number" && it.progress > 0.02 && it.progress < 0.99 ? (
                     <View style={styles.progressWrap}>
                       <View style={[styles.progressFill, { width: `${Math.min(100, Math.round(it.progress * 100))}%` }]} />
                     </View>

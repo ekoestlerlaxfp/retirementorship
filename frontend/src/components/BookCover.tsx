@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,8 +6,36 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { colors, radius, shadow, spacing } from "../theme";
 import type { BookT, MagazineT } from "../api/client";
+import { completedStore } from "../offline/completed";
 
 const DEFAULT_GRADIENT = ["#4B3166", "#7A5B99"] as const;
+
+function useIsComplete(id: string | number) {
+  const [done, setDone] = useState<boolean>(() => completedStore.has(String(id)));
+  useEffect(() => completedStore.subscribe((set) => setDone(set.has(String(id)))), [id]);
+  return done;
+}
+
+function CompleteBadge() {
+  return (
+    <View style={badgeStyles.wrap} pointerEvents="none">
+      <Ionicons name="checkmark" size={14} color="#FFF" />
+    </View>
+  );
+}
+
+const badgeStyles = StyleSheet.create({
+  wrap: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: colors.success || "#2E7D5B",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "#FFF",
+    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
+});
 
 export function BookCover({
   book,
@@ -28,6 +56,7 @@ export function BookCover({
   const accent = book.accent || colors.brandPrimary;
   const go = () => (onPress ? onPress() : router.push({ pathname: "/book/[id]", params: { id: String(book.id) } }));
   const pct = Math.max(0, Math.min(1, progress || 0));
+  const done = useIsComplete(book.id);
   return (
     <Pressable
       testID={`book-cover-${book.id}`}
@@ -58,6 +87,7 @@ export function BookCover({
             <View style={[styles.progressFill, { width: `${Math.max(6, Math.round(pct * 100))}%`, backgroundColor: accent }]} />
           </View>
         ) : null}
+        {done ? <CompleteBadge /> : null}
       </View>
     </Pressable>
   );
@@ -75,6 +105,7 @@ export function MagazineCover({
   const grad = (mag.cover_gradient && mag.cover_gradient.length >= 2 ? mag.cover_gradient : [colors.brandPrimary, "#B0793A"]) as any;
   const accent = mag.accent || "#FFF";
   const label = mag.issue_label || "ISSUE";
+  const done = useIsComplete(mag.id);
   return (
     <Pressable
       testID={`mag-cover-${mag.id}`}
@@ -110,6 +141,7 @@ export function MagazineCover({
             <Text style={styles.magStampText}>EVERGREEN</Text>
           </View>
         ) : null}
+        {done ? <CompleteBadge /> : null}
       </View>
     </Pressable>
   );

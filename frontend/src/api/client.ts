@@ -195,6 +195,9 @@ export const api = {
   history: () => req<any[]>("/user/history"),
   addHistory: (h: { post_id: string; title: string; image?: string | null; category?: string | null; type?: string; progress?: number }) =>
     req("/user/history", { method: "POST", body: JSON.stringify(h) }),
+  completedIds: () => req<string[]>("/user/completed/ids"),
+  sendFeedback: (question: string) =>
+    req<{ ok: boolean }>("/user/feedback", { method: "POST", body: JSON.stringify({ question }) }),
 
   // Content types
   books: () => req<BookT[]>("/books"),

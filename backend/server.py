@@ -792,6 +792,7 @@ async def user_history_list(authorization: Optional[str] = Header(None)):
 @api_router.post("/user/history")
 async def user_history_add(payload: HistoryIn, authorization: Optional[str] = Header(None)):
     user = await require_user(authorization)
+    prog = float(payload.progress or 0.0)
     doc = {
         "user_id": user["user_id"],
         "post_id": payload.post_id,
@@ -799,7 +800,8 @@ async def user_history_add(payload: HistoryIn, authorization: Optional[str] = He
         "image": payload.image,
         "category": payload.category,
         "type": payload.type,
-        "progress": payload.progress,
+        "progress": prog,
+        "completed": prog >= 0.99,
         "updated_at": utcnow(),
     }
     await db.history.update_one(
@@ -807,6 +809,82 @@ async def user_history_add(payload: HistoryIn, authorization: Optional[str] = He
         {"$set": doc},
         upsert=True,
     )
+    return {"ok": True}
+
+
+@api_router.get("/user/completed/ids")
+async def user_completed_ids(authorization: Optional[str] = Header(None)):
+    """Fast list of post_ids the user has marked complete — used to decorate cards."""
+    user = await require_user(authorization)
+    docs = await db.history.find(
+        {"user_id": user["user_id"], "$or": [{"completed": True}, {"progress": {"$gte": 0.99}}]},
+        {"_id": 0, "post_id": 1},
+    ).to_list(2000)
+    return [d["post_id"] for d in docs]
+
+
+class FeedbackIn(BaseModel):
+    question: str = Field(min_length=3, max_length=4000)
+
+
+@api_router.post("/user/feedback")
+async def user_feedback(payload: FeedbackIn, authorization: Optional[str] = Header(None)):
+    """Send the signed-in user's question to the RetireMentorship team inbox."""
+    user = await require_user(authorization)
+    from emailer import send_email
+    from html import escape as _esc
+
+    full_name = f"{user.get('first_name') or ''} {user.get('last_name') or ''}".strip() or (user.get("email") or "A RetireMentorship reader")
+    email = user.get("email") or ""
+    phone = user.get("phone") or ""
+    stage = user.get("retirement_stage") or "not specified"
+    question = payload.question.strip()
+
+    subject = f"New question from {full_name}"
+    body_lines = _esc(question).replace("\n", "<br>")
+    inner = (
+        f'<p><strong>{_esc(full_name)}</strong> asked a question through the app:</p>'
+        f'<blockquote style="border-left:4px solid #4B3166;padding:8px 16px;margin:16px 0;'
+        f'background:#F0E7D2;border-radius:8px;color:#231F20;font-size:15px;line-height:22px">'
+        f'{body_lines}</blockquote>'
+        f'<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;font-size:14px;color:#4B3166">'
+        f'<tr><td style="padding:4px 12px 4px 0;color:#8B7B63">Email</td>'
+        f'<td style="padding:4px 0">{_esc(email)}</td></tr>'
+        f'<tr><td style="padding:4px 12px 4px 0;color:#8B7B63">Phone</td>'
+        f'<td style="padding:4px 0">{_esc(phone) or "&mdash;"}</td></tr>'
+        f'<tr><td style="padding:4px 12px 4px 0;color:#8B7B63">Retirement stage</td>'
+        f'<td style="padding:4px 0">{_esc(stage)}</td></tr>'
+        f'</table>'
+    )
+    # Reuse the branded chrome from emailer._wrap
+    from emailer import _wrap
+    html = _wrap(inner, footer_note=f"Sent from the {os.environ.get('EMAIL_FROM_NAME','RetireMentorship')} mobile app on behalf of a reader.")
+
+    try:
+        await send_email(
+            to="ekoestler@laxfp.com",
+            subject=subject,
+            html=html,
+            reply_to=email or None,
+        )
+    except Exception as e:
+        logger.error(f"Feedback email failed: {e}")
+        raise HTTPException(status_code=502, detail="We couldn't send your question right now — please try again in a minute.")
+
+    # Log the feedback for auditability
+    try:
+        await db.feedback.insert_one({
+            "user_id": user["user_id"],
+            "email": email,
+            "full_name": full_name,
+            "phone": phone,
+            "retirement_stage": stage,
+            "question": question,
+            "created_at": utcnow(),
+        })
+    except Exception:
+        pass
+
     return {"ok": True}
 
 

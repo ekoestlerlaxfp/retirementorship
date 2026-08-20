@@ -9,11 +9,11 @@ import WebView from "react-native-webview";
 import RenderHtml from "react-native-render-html";
 import { colors, spacing, radius, type as typo } from "@/src/theme";
 import { api, cachedApi, WPPost } from "@/src/api/client";
-import { CenteredLoader, GoldPill, Muted } from "@/src/components/ui";
+import { CenteredLoader, CompletePill, GoldPill, Muted } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { CrossWebView } from "@/src/components/CrossWebView";
 import { useAuth } from "@/src/context/auth";
-import { progress as progressStore, downloads } from "@/src/offline";
+import { progress as progressStore, downloads, useCompleted } from "@/src/offline";
 
 function extractYoutubeId(html: string): string | null {
   const m1 = html.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/);
@@ -34,6 +34,7 @@ export default function ArticleScreen() {
   const [bookmarked, setBookmarked] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const { user } = useAuth();
+  const { isComplete, markComplete, unmarkComplete } = useCompleted();
   const lastProgressSaved = useRef(0);
 
   useEffect(() => {
@@ -85,6 +86,22 @@ export default function ArticleScreen() {
     if (!post) return;
     try { await Share.share({ message: `${post.title} — ${post.link}`, url: post.link, title: post.title }); } catch {}
   }, [post]);
+
+  const toggleComplete = useCallback(async () => {
+    if (!post) return;
+    if (!user) { router.push("/(auth)/login"); return; }
+    const idStr = String(post.id);
+    try {
+      if (isComplete(idStr)) {
+        await unmarkComplete(idStr);
+      } else {
+        await markComplete({
+          post_id: idStr, title: post.title, image: post.image,
+          category: post.category?.name, type: post.type,
+        });
+      }
+    } catch {}
+  }, [post, user, isComplete, markComplete, unmarkComplete]);
 
   const toggleOffline = useCallback(async () => {
     if (!post) return;
@@ -166,6 +183,13 @@ export default function ArticleScreen() {
         <Pressable testID="article-share" onPress={onShare} style={styles.iconBtn} hitSlop={12}>
           <Ionicons name="share-outline" size={20} color={colors.onSurface} />
         </Pressable>
+        <Pressable testID="article-complete" onPress={toggleComplete} style={styles.iconBtn} hitSlop={12}>
+          <Ionicons
+            name={post && isComplete(String(post.id)) ? "checkmark-done-circle" : "checkmark-circle-outline"}
+            size={22}
+            color={post && isComplete(String(post.id)) ? (colors.success || "#2E7D5B") : colors.onSurface}
+          />
+        </Pressable>
         <Pressable testID="article-bookmark" onPress={toggleBookmark} style={styles.iconBtn} hitSlop={12}>
           <Ionicons
             name={bookmarked ? "bookmark" : "bookmark-outline"}
@@ -200,6 +224,7 @@ export default function ArticleScreen() {
         <View style={styles.body}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
             {post.category && <GoldPill label={post.category.name} testID="article-category" />}
+            {isComplete(String(post.id)) ? <CompletePill testID="article-complete-pill" /> : null}
             {fromCache && (
               <View style={styles.offlinePill} testID="article-offline-pill">
                 <Ionicons name="cloud-offline-outline" size={12} color={colors.brandSecondary} />
