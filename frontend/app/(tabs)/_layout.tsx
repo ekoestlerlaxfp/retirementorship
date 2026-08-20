@@ -26,6 +26,27 @@ function TabBg() {
   );
 }
 
+// Centered icon wrapper — the react-navigation tab item still reserves label
+// space even with `tabBarShowLabel: false`, which pushes icons upward. Wrapping
+// in a `flex: 1` centered box + a negative marginBottom compensates for it.
+const iconCenter: any = {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+  alignSelf: "stretch",
+  width: "100%",
+  height: "100%",
+  marginBottom: -14, // reclaim label placeholder space
+};
+
+function TabIcon({ name, color, size = 24 }: { name: keyof typeof Ionicons.glyphMap; color: string; size?: number }) {
+  return (
+    <View style={iconCenter}>
+      <Ionicons name={name} size={size} color={color} />
+    </View>
+  );
+}
+
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   return (
@@ -35,6 +56,7 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.brandSecondary,
         tabBarInactiveTintColor: colors.muted,
         tabBarShowLabel: false,
+        tabBarLabelStyle: { display: "none" },
         tabBarItemStyle: {
           paddingVertical: 0,
           paddingTop: 0,
@@ -67,9 +89,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: "",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />
+            <TabIcon name={focused ? "home" : "home-outline"} color={color} />
           ),
           tabBarButtonTestID: "tab-home",
         }}
@@ -77,9 +99,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="learn"
         options={{
-          title: "Learn",
+          title: "",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "school" : "school-outline"} size={24} color={color} />
+            <TabIcon name={focused ? "school" : "school-outline"} color={color} />
           ),
           tabBarButtonTestID: "tab-learn",
         }}
@@ -87,9 +109,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="tools"
         options={{
-          title: "Tools",
+          title: "",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "calculator" : "calculator-outline"} size={24} color={color} />
+            <TabIcon name={focused ? "calculator" : "calculator-outline"} color={color} />
           ),
           tabBarButtonTestID: "tab-tools",
         }}
@@ -97,9 +119,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="library"
         options={{
-          title: "Library",
+          title: "",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "heart" : "heart-outline"} size={24} color={color} />
+            <TabIcon name={focused ? "heart" : "heart-outline"} color={color} />
           ),
           tabBarButtonTestID: "tab-library",
         }}
@@ -107,9 +129,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: "",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "person-circle" : "person-circle-outline"} size={26} color={color} />
+            <TabIcon name={focused ? "person-circle" : "person-circle-outline"} color={color} size={26} />
           ),
           tabBarButtonTestID: "tab-profile",
         }}
