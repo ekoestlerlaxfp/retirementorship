@@ -28,10 +28,6 @@ export default function LoginScreen() {
       const m = msg.match(/API 4\d\d:\s*(.+)/);
       let detail = m ? m[1] : "Sign in failed.";
       try { const j = JSON.parse(detail); detail = j.detail || detail; } catch {}
-      if (msg.includes("403") && detail.toLowerCase().includes("verify")) {
-        router.push({ pathname: "/(auth)/verify", params: { email: email.trim() } });
-        return;
-      }
       setError(detail);
     } finally { setBusy(false); }
   }, [email, password, signIn]);

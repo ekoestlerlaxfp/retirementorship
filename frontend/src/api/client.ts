@@ -135,7 +135,7 @@ export const api = {
   register: (payload: {
     first_name: string; last_name: string; email: string; phone: string; password: string;
     retirement_stage?: string | null;
-  }) => req<{ user: User; verification_required: boolean }>("/auth/register", {
+  }) => req<{ user: User; session_token?: string }>("/auth/register", {
     method: "POST", body: JSON.stringify(payload),
   }),
   verify: (email: string, code: string) =>

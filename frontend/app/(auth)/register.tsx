@@ -28,14 +28,8 @@ export default function RegisterScreen() {
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     setBusy(true);
     try {
-      const res = await register({ first_name: first, last_name: last, email, phone, password });
-      router.replace({
-        pathname: "/(auth)/verify",
-        params: {
-          email: email.trim(),
-          email_error: res.email_sent ? "" : (res.email_error || "1"),
-        },
-      });
+      await register({ first_name: first, last_name: last, email, phone, password });
+      router.replace("/(tabs)");
     } catch (e: any) {
       const msg = String(e?.message || "");
       const m = msg.match(/API 4\d\d:\s*(.+)/);
@@ -101,7 +95,7 @@ export default function RegisterScreen() {
             />
 
             <Text style={styles.legal}>
-              By continuing you agree to the {BRAND.name} terms and privacy policy. We&apos;ll email you a 6-digit verification code.
+              By continuing you agree to the {BRAND.name} terms and privacy policy.
             </Text>
 
             <View style={styles.divider} />

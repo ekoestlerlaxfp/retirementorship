@@ -462,6 +462,7 @@ async def auth_register(payload: RegisterIn):
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
 
     user_id = f"user_{uuid.uuid4().hex[:12]}"
+    now_ = utcnow()
     doc = {
         "user_id": user_id,
         "email": email,
@@ -469,59 +470,34 @@ async def auth_register(payload: RegisterIn):
         "last_name": payload.last_name.strip(),
         "phone": payload.phone.strip(),
         "password_hash": _hash_pw(payload.password),
-        "verified": False,
+        "verified": True,  # verification removed — accounts are active immediately
         "retirement_stage": payload.retirement_stage,
         "source": "email",
-        "created_at": utcnow(),
-        "last_login": None,
+        "created_at": now_,
+        "last_login": now_,
     }
     try:
         await db.users.insert_one(doc)
     except Exception:
-        # unique-index race
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
 
-    # Fire the lead webhook non-blocking.
+    # Fire the lead webhook so advisors get the new signup (non-blocking).
     asyncio.create_task(_fire_leads_webhook(doc))
 
-    # AWAIT the verification email so we can surface delivery failures immediately.
-    email_ok = await _send_verification(doc)
-
-    resp: dict = {"user": _public_user(doc), "verification_required": True, "email_sent": email_ok}
-    if not email_ok:
-        resp["email_error"] = (
-            "We couldn't email your verification code (the address may be blocked or misspelled). "
-            "Check the address, then tap Resend code."
-        )
-    return resp
+    # Issue a session so the user is signed in immediately.
+    token = await _issue_session(user_id)
+    return {"session_token": token, "user": _public_user(doc)}
 
 
 @api_router.post("/auth/verify")
 async def auth_verify(payload: VerifyIn):
+    """Legacy endpoint — email verification has been removed. Signs the user in if the email exists.
+    Kept for backwards compatibility so any in-flight app installs still work."""
     email = _norm_email(payload.email)
     user = await db.users.find_one({"email": email}, {"_id": 0})
-    rec = None
-    if user:
-        rec = await db.user_verification_codes.find_one(
-            {"user_id": user["user_id"], "purpose": "verify", "consumed": False},
-            sort=[("created_at", -1)],
-        )
-    now_ = utcnow()
-    if not user or not rec:
-        raise HTTPException(status_code=400, detail="Invalid or expired code.")
-    exp = rec["expires_at"]
-    if isinstance(exp, datetime) and exp.tzinfo is None:
-        exp = exp.replace(tzinfo=timezone.utc)
-    if exp < now_ or rec.get("attempts", 0) >= 5 or not secrets.compare_digest(rec["code_hash"], _digest(payload.code)):
-        await db.user_verification_codes.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
-        raise HTTPException(status_code=400, detail="Invalid or expired code.")
-
-    await db.users.update_one(
-        {"user_id": user["user_id"]},
-        {"$set": {"verified": True, "last_login": now_}},
-    )
-    await db.user_verification_codes.update_one({"_id": rec["_id"]}, {"$set": {"consumed": True}})
-
+    if not user:
+        raise HTTPException(status_code=400, detail="Account not found.")
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"verified": True, "last_login": utcnow()}})
     token = await _issue_session(user["user_id"])
     fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     return {"session_token": token, "user": _public_user(fresh)}
@@ -529,33 +505,9 @@ async def auth_verify(payload: VerifyIn):
 
 @api_router.post("/auth/resend-code")
 async def auth_resend_code(payload: ResendCodeIn):
-    email = _norm_email(payload.email)
-    user = await db.users.find_one({"email": email}, {"_id": 0})
-    if not user or user.get("verified"):
-        # Enumeration-resistant for unknown/verified emails.
-        return {"ok": True, "sent": True}
-
-    # Cooldown: skip a real send if a code was created in the last N seconds.
-    last = await db.user_verification_codes.find_one(
-        {"user_id": user["user_id"], "purpose": "verify"},
-        sort=[("created_at", -1)],
-    )
-    if last:
-        created = last.get("created_at")
-        if isinstance(created, datetime):
-            if created.tzinfo is None:
-                created = created.replace(tzinfo=timezone.utc)
-            if (utcnow() - created).total_seconds() < RESEND_COOLDOWN_SEC:
-                # Tell caller we throttled so UI doesn't show a misleading "sent!" toast.
-                return {"ok": True, "sent": True, "throttled": True}
-
-    sent = await _send_verification(user)
-    if not sent:
-        raise HTTPException(
-            status_code=502,
-            detail="We couldn't send the verification email. Check the address for typos, or contact support.",
-        )
-    return {"ok": True, "sent": True}
+    """Legacy no-op — email verification has been removed."""
+    _norm_email(payload.email)
+    return {"ok": True, "sent": True, "verification_disabled": True}
 
 
 @api_router.post("/auth/login")
@@ -569,10 +521,6 @@ async def auth_login(payload: LoginIn):
     if not ok:
         await _bad_login(key)
         raise HTTPException(status_code=401, detail="Invalid email or password.")
-    if not user.get("verified"):
-        # Trigger a fresh code so they can complete verification.
-        await _send_verification(user)
-        raise HTTPException(status_code=403, detail="Please verify your email first — we've resent your code.")
     await _clear_login_attempts(key)
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"last_login": utcnow()}})
     token = await _issue_session(user["user_id"])
@@ -1371,6 +1319,12 @@ async def on_startup():
                     await coll.update_one({"_id": doc["_id"]}, {"$set": {"post_id": str(doc["post_id"])}})
         except Exception as mig_e:
             logger.warning(f"post_id migration skipped: {mig_e}")
+
+        # Email verification removed — mark every existing account verified.
+        try:
+            await db.users.update_many({"verified": {"$ne": True}}, {"$set": {"verified": True}})
+        except Exception as e:
+            logger.warning(f"verified-migration skipped: {e}")
 
         # Auth migration: wipe legacy Google-sourced accounts and their sessions
         # (user requested option 3a on the auth switch — dev only, no real users yet).

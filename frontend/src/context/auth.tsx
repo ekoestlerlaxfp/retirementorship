@@ -15,7 +15,7 @@ type AuthContextT = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<{ verification_required: boolean; email_sent: boolean; email_error: string | null }>;
+  register: (payload: RegisterPayload) => Promise<void>;
   verify: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -74,12 +74,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       last_name: payload.last_name.trim(),
       phone: payload.phone.trim(),
     });
-    return {
-      verification_required: !!res.verification_required,
-      email_sent: res.email_sent !== false,
-      email_error: res.email_error || null,
-    };
-  }, []);
+    if (res.session_token && res.user) {
+      await applySession(res.session_token, res.user);
+    }
+  }, [applySession]);
 
   const verify = useCallback(async (email: string, code: string) => {
     const res = await api.verify(email.trim(), code.trim());
