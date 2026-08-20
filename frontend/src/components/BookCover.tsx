@@ -68,29 +68,38 @@ export function MagazineCover({
   width = 168,
   height = 220,
 }: {
-  mag: MagazineT;
+  mag: MagazineT & { issue_label?: string; cover_gradient?: string[]; accent?: string };
   width?: number;
   height?: number;
 }) {
+  const grad = (mag.cover_gradient && mag.cover_gradient.length >= 2 ? mag.cover_gradient : [colors.brandPrimary, "#B0793A"]) as any;
+  const accent = mag.accent || "#FFF";
+  const label = mag.issue_label || "ISSUE";
   return (
     <Pressable
       testID={`mag-cover-${mag.id}`}
-      onPress={() => {}}
+      onPress={() => router.push({ pathname: "/book/read/[id]", params: { id: String(mag.id) } })}
       style={({ pressed }) => [{ width, height }, pressed && { transform: [{ scale: 0.98 }] }]}
     >
       <View style={[styles.magCover, { width, height, borderRadius: radius.md }]}>
         {mag.image ? (
           <Image source={{ uri: mag.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
         ) : (
-          <LinearGradient colors={[colors.brandPrimary, "#B0793A"]} style={StyleSheet.absoluteFillObject} />
+          <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
         )}
-        <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.7)"]} style={StyleSheet.absoluteFillObject} pointerEvents="none" />
-        <View style={styles.textWrap} pointerEvents="none">
+        <LinearGradient colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.65)"]} style={[StyleSheet.absoluteFillObject, { pointerEvents: "none" as any }]} />
+        <View style={[styles.textWrap, { pointerEvents: "none" as any }]}>
+          <View style={[styles.rule, { backgroundColor: accent, width: 32 }]} />
           <Text style={styles.title} numberOfLines={3}>{mag.title}</Text>
+          {mag.subtitle ? (
+            <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, marginTop: 4, letterSpacing: 0.3 }} numberOfLines={2}>
+              {mag.subtitle}
+            </Text>
+          ) : null}
         </View>
-        <View style={styles.magStamp} pointerEvents="none">
+        <View style={[styles.magStamp, { pointerEvents: "none" as any }]}>
           <Ionicons name="newspaper" size={12} color="#FFF" />
-          <Text style={styles.magStampText}>ISSUE</Text>
+          <Text style={styles.magStampText}>{label}</Text>
         </View>
       </View>
     </Pressable>

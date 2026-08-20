@@ -56,9 +56,14 @@ export type MagazineT = {
   id: string | number;
   slug: string;
   title: string;
+  subtitle?: string;
+  issue_label?: string;
+  cover_gradient?: string[];
+  accent?: string;
   excerpt?: string;
   image?: string | null;
   content_html?: string;
+  pdf_url?: string;
   date?: string;
   type: "magazine";
 };

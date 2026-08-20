@@ -573,7 +573,6 @@ async def list_books():
 
 @api_router.get("/books/{book_id}")
 async def get_book(book_id: str):
-    # Try WordPress first (numeric id → CPT)
     if book_id.isdigit():
         try:
             data = await wp_get(f"/book/{book_id}", {"_embed": 1}, ttl=180)
@@ -581,17 +580,107 @@ async def get_book(book_id: str):
                 return _transform_cpt(data, "book")
         except Exception:
             pass
-    # Fall back to seed
     for b in BOOK_FALLBACK:
         if b["id"] == book_id or b["slug"] == book_id:
             return b
+    # Fall back to magazines so the same reader route works for both
+    for m in MAGAZINE_FALLBACK:
+        if m["id"] == book_id or m["slug"] == book_id:
+            # Present as book-shape so the reader UI works uniformly
+            return {**m, "author": "RetireMentorship", "chapters": 0, "reading_time": 0, "hero_image": None}
     raise HTTPException(status_code=404, detail="Book not found")
+
+
+MAGAZINE_FALLBACK: List[dict] = [
+    {
+        "id": "mag-evergreen-1",
+        "slug": "evergreen-issue-1",
+        "title": "Evergreen · Issue 1",
+        "subtitle": "Retirement wisdom that never goes out of season.",
+        "issue_label": "EVERGREEN",
+        "cover_gradient": ["#2A5942", "#4A8567"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/vru7npn5_Evergreen%20Issue.pdf",
+        "date": "2025-01-15",
+        "type": "magazine",
+    },
+    {
+        "id": "mag-evergreen-2",
+        "slug": "evergreen-issue-2",
+        "title": "Evergreen · Issue 2",
+        "subtitle": "Retirement wisdom that never goes out of season.",
+        "issue_label": "EVERGREEN",
+        "cover_gradient": ["#1F4633", "#356646"],
+        "accent": "#E4D0AB",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/bex1qyzf_Evergreen%20Issue%202.pdf",
+        "date": "2025-07-15",
+        "type": "magazine",
+    },
+    {
+        "id": "mag-rmag-vol-1",
+        "slug": "rmag-volume-1",
+        "title": "RMag · Volume 1",
+        "subtitle": "The RetireMentorship semi-annual magazine.",
+        "issue_label": "VOLUME 1",
+        "cover_gradient": ["#4B3166", "#7A5B99"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/l3byhtqz_RMag%20Vol1.pdf",
+        "date": "2024-01-15",
+        "type": "magazine",
+    },
+    {
+        "id": "mag-rmag-vol-2",
+        "slug": "rmag-volume-2",
+        "title": "RMag · Volume 2",
+        "subtitle": "The RetireMentorship semi-annual magazine.",
+        "issue_label": "VOLUME 2",
+        "cover_gradient": ["#B0793A", "#C5A059"],
+        "accent": "#4B3166",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/yeltnh1m_RMag%20Vol2.pdf",
+        "date": "2024-07-15",
+        "type": "magazine",
+    },
+    {
+        "id": "mag-rmag-vol-3",
+        "slug": "rmag-volume-3",
+        "title": "RMag · Volume 3",
+        "subtitle": "The RetireMentorship semi-annual magazine.",
+        "issue_label": "VOLUME 3",
+        "cover_gradient": ["#1F3B6E", "#5A82BA"],
+        "accent": "#E4D0AB",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/b4xxls7v_RMag%20Vol3.pdf",
+        "date": "2025-01-15",
+        "type": "magazine",
+    },
+]
 
 
 @api_router.get("/magazines")
 async def list_magazines():
     items = await _fetch_cpt("magazine")
-    return items  # empty until you register the CPT — the UI shows a nice "coming soon" state
+    if not items:
+        items = MAGAZINE_FALLBACK
+    return items
+
+
+@api_router.get("/magazines/{mag_id}")
+async def get_magazine(mag_id: str):
+    if mag_id.isdigit():
+        try:
+            data = await wp_get(f"/magazine/{mag_id}", {"_embed": 1}, ttl=180)
+            if isinstance(data, dict) and data.get("id"):
+                return _transform_cpt(data, "magazine")
+        except Exception:
+            pass
+    for m in MAGAZINE_FALLBACK:
+        if m["id"] == mag_id or m["slug"] == mag_id:
+            return m
+    raise HTTPException(status_code=404, detail="Magazine not found")
 
 
 @api_router.get("/videos")
