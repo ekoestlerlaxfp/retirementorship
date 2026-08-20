@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, spacing } from "@/src/theme";
+import { colors } from "@/src/theme";
 
 const TAB_BG = "rgba(255,253,250,0.88)";
 
@@ -14,14 +14,14 @@ function TabBg() {
       <View style={StyleSheet.absoluteFillObject}>
         <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFillObject} />
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,253,250,0.35)" }]} />
-        <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+        <View style={[StyleSheet.absoluteFillObject, { borderRadius: 26, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
       </View>
     );
   }
   return (
     <View style={StyleSheet.absoluteFillObject}>
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG, borderRadius: 28 }]} />
-      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG, borderRadius: 26 }]} />
+      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 26, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
     </View>
   );
 }
@@ -35,16 +35,23 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.brandSecondary,
         tabBarInactiveTintColor: colors.muted,
         tabBarShowLabel: false,
-        tabBarItemStyle: { paddingVertical: 4 },
+        tabBarItemStyle: {
+          paddingVertical: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          alignItems: "center",
+          justifyContent: "center",
+        },
         tabBarStyle: {
           position: "absolute",
           left: 16,
           right: 16,
           bottom: Math.max(16, insets.bottom + 8),
           borderTopWidth: 0,
-          borderRadius: 28,
-          height: 60,
+          borderRadius: 26,
+          height: 52,
           paddingTop: 0,
+          paddingBottom: 0,
           paddingHorizontal: 8,
           backgroundColor: "transparent",
           overflow: "hidden",
