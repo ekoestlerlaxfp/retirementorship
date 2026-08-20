@@ -182,7 +182,7 @@ export default function ArticleScreen() {
         scrollEventThrottle={200}
       >
         {youtubeId ? (
-          <View style={styles.videoWrap}>
+          <View style={[styles.videoWrap, { marginTop: insets.top + 72 }]}>
             <CrossWebView
               testID="article-video"
               uri={`https://www.youtube.com/embed/${youtubeId}?playsinline=1&modestbranding=1&rel=0`}
@@ -209,9 +209,19 @@ export default function ArticleScreen() {
           </View>
           <Text style={styles.title} testID="article-title">{post.title}</Text>
           <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={16} color={colors.muted} />
-            <Text style={styles.meta}>{post.reading_time} min read</Text>
-            <View style={styles.dot} />
+            {post.type !== "video" ? (
+              <>
+                <Ionicons name="time-outline" size={16} color={colors.muted} />
+                <Text style={styles.meta}>{post.reading_time} min read</Text>
+                <View style={styles.dot} />
+              </>
+            ) : (
+              <>
+                <Ionicons name="play-circle-outline" size={16} color={colors.muted} />
+                <Text style={styles.meta}>Video</Text>
+                <View style={styles.dot} />
+              </>
+            )}
             <Text style={styles.meta}>{new Date(post.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</Text>
           </View>
 
@@ -268,7 +278,7 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: colors.border,
   },
-  videoWrap: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000", marginTop: 90 },
+  videoWrap: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" },
   video: { flex: 1, backgroundColor: "#000" },
   heroImgWrap: { width: "100%", height: 320, backgroundColor: colors.surfaceTertiary, marginTop: 0 },
   body: { paddingHorizontal: spacing.xl, paddingTop: spacing["2xl"] },

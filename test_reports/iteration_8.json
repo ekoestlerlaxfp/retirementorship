@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 8 backend + frontend testing complete. Backend: 8/8 pytest tests passed (100%) via existing /app/backend/tests/test_iteration7_author_and_videos.py — /api/books returns 2 books with author 'Freeman Linde, CFP®', /api/videos?limit=5 returns type=='video' items with YouTube markers in content_html, /api/wp/home-feed hero/tip/videos/trending/recommended are cross-rail disjoint, /api/wp/latest-modified returns ISO modified + int id, /api/admin/leads is 401 without X-Admin-Key and 200 with 'rm_admin_ChangeMe_2026'. Frontend Playwright @390x844 on https://wisdom-edge.preview.emergentagent.com verified all three iter-8 fixes: (1) Bottom tab bar is icons-only — testIDs tab-home/tab-learn/tab-tools/tab-library/tab-profile exist, each innerText contains only Ionicons unicode glyphs and NONE of the words 'Home'/'Learn'/'Tools'/'Library'/'Profile'; (2) Video article (opened via learn-video-15919) shows article-video at y=72 (>=60 requirement met, no overlap with top bar) and article-back at y=0..44, cleanly above the video; (3) Article body has NO 'min read' text and does show 'Video' badge (visible with play-circle icon in meta row). Screenshot confirmed visually.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7_author_and_videos.py",
+    "/app/test_reports/pytest/iteration8_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "article/[id].tsx:185 uses marginTop: insets.top + 72 which correctly pushes the video below the fixed absolute topBar (44px icon at y=0 + padding). Verified y=72 on web preview where insets.top==0. iOS/Android with non-zero insets.top will simply add more headroom, which is safe.",
+    "(tabs)/_layout.tsx:37 sets tabBarShowLabel:false — clean way to enforce icon-only nav; Tabs.Screen still uses title:'Home' etc for a11y/screen-reader announcement, which is fine.",
+    "article/[id].tsx:212-224 conditional 'Video' vs 'X min read' meta row is well scoped by post.type !== 'video' — works for any future video content too."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (3/3 bug-fix checks)"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter8 pytest reuses /app/backend/tests/test_iteration7_author_and_videos.py (all backend regressions still green). Frontend Playwright verified (a) bottom nav icons-only, (b) article-video top y=72 >= 60 not hidden behind top bar, (c) 'Video' badge shown instead of 'min read' on video articles. Test video used: learn-video-15919 ('You've Probably Been Told This About Life Insurance…'). Preview URL: https://wisdom-edge.preview.emergentagent.com.",
+  "rca_of_issue": "N/A — all 3 reported bugs are fully fixed. Root cause of original bugs (before this iter's fix): (a) video article used no top offset so YouTube iframe rendered at y=0 under the absolute topBar; fixed by marginTop: insets.top + 72. (b) tabBarShowLabel defaulted true; fixed by explicit false. (c) meta row unconditionally rendered `${reading_time} min read`; fixed by post.type==='video' branch showing 'Video' + play-circle icon."
+}

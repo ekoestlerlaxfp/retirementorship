@@ -194,7 +194,7 @@ function VideosSection({ videos }: { videos: WPPost[] | null }) {
             {v.excerpt ? <Text style={styles.videoRowExcerpt} numberOfLines={2}>{v.excerpt}</Text> : null}
             <View style={styles.videoRowMeta}>
               <Ionicons name="play-circle" size={14} color={colors.brandSecondary} />
-              <Text style={styles.videoRowMetaText}>Watch now · {v.reading_time || 1} min</Text>
+              <Text style={styles.videoRowMetaText}>Watch now</Text>
             </View>
           </View>
         </Pressable>
