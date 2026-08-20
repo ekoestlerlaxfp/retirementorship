@@ -104,6 +104,11 @@ export function MagazineCover({
               <Text style={styles.magStampText}>{label}</Text>
             </View>
           </>
+        ) : label.toUpperCase().startsWith("EVERGREEN") ? (
+          <View style={[styles.magStamp, { pointerEvents: "none" as any, backgroundColor: "rgba(31,70,51,0.9)" }]}>
+            <Ionicons name="leaf" size={12} color="#FFF" />
+            <Text style={styles.magStampText}>EVERGREEN</Text>
+          </View>
         ) : null}
       </View>
     </Pressable>
