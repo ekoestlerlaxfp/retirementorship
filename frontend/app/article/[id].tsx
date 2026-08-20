@@ -58,9 +58,9 @@ export default function ArticleScreen() {
       downloads.get(`article-${p.id}`).then((d) => setDownloaded(!!d));
       if (user) {
         api.addHistory({
-          post_id: p.id, title: p.title, image: p.image, category: p.category?.name, type: p.type, progress: 0.05,
+          post_id: String(p.id), title: p.title, image: p.image, category: p.category?.name, type: p.type, progress: 0.05,
         }).catch(() => {});
-        api.bookmarkIds().then((ids) => setBookmarked(ids.includes(p.id))).catch(() => {});
+        api.bookmarkIds().then((ids) => setBookmarked(ids.includes(String(p.id)))).catch(() => {});
       }
     });
   }, [id, user]);
@@ -71,10 +71,10 @@ export default function ArticleScreen() {
     if (!post) return;
     if (!user) { router.push("/(tabs)/profile"); return; }
     try {
-      if (bookmarked) { await api.removeBookmark(post.id); setBookmarked(false); }
+      if (bookmarked) { await api.removeBookmark(String(post.id)); setBookmarked(false); }
       else {
         await api.addBookmark({
-          post_id: post.id, title: post.title, image: post.image, category: post.category?.name, type: post.type,
+          post_id: String(post.id), title: post.title, image: post.image, category: post.category?.name, type: post.type,
         });
         setBookmarked(true);
       }
@@ -134,7 +134,7 @@ export default function ArticleScreen() {
     });
     if (user) {
       api.addHistory({
-        post_id: post.id, title: post.title, image: post.image, category: post.category?.name, type: post.type, progress: p,
+        post_id: String(post.id), title: post.title, image: post.image, category: post.category?.name, type: post.type, progress: p,
       }).catch(() => {});
     }
   }, [post, user]);

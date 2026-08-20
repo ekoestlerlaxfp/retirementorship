@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 9 backend-only testing complete for the save/bookmark + reading-history refactor. 17/17 pytest tests PASSED in /app/backend/tests/test_iteration9_bookmarks_history.py. Verified: (a) all 4 content kinds (book-3d-retirement-income, mag-rmag-vol-1, article '12345', video '67890') POST to /api/user/bookmarks and /api/user/history as STRING post_ids and round-trip through GET intact (post_id/title/type/category/image + created_at/updated_at preserved, no MongoDB _id leak); (b) GET /api/user/bookmarks and /api/user/history return most-recent first; (c) GET /api/user/bookmarks/ids returns all 4 as strings; (d) POST /api/user/bookmarks is idempotent — duplicate post_id updates the existing doc (unique index on user_id+post_id, upsert) with no duplicate row; (e) DELETE /api/user/bookmarks/book-3d-retirement-income (path param with dashes and letters) removes just that entry; (f) history progress floats (0.15, 0.5, 0.9, 1.0) survive round-trip exactly; (g) all 6 endpoints return 401 without a Bearer token AND with a bogus token; (h) startup migration works end-to-end: seeded {post_id: 55555} (int) directly in Mongo, restarted backend via supervisorctl, and verified the doc was rewritten to post_id: '55555' (str) — same for history with 77777. Auth was seeded directly in Mongo (users + user_sessions) per instructions since app is Google-OAuth-only; test docs cleaned up via fixture teardown. IMPORTANT run instruction: this file must be run with `-n 0` (serial) because TestPostIdMigration restarts the backend and would race with parallel classes under pytest.ini's `--dist loadscope`.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9_bookmarks_history.py",
+    "/app/test_reports/pytest/iteration9_results.xml"
+  ],
+  "action_items": [
+    "None for the bookmark/history feature itself — all 17 checks green.",
+    "Unrelated pre-existing regressions noticed while smoke-testing prior suites (out of scope for this iteration, flagged FYI): (1) test_iteration6_books_pdf.py expects book-3d-retirement-income to have pdf_url='https://mozilla.github.io/.../compressed.tracemonkey-pldi-09.pdf' but BOOK_FALLBACK now has pdf_url=None — stale test vs intentional data change. (2) test_iteration7_author_and_videos.py errors on KeyError: 'EXPO_PUBLIC_BACKEND_URL' at import time — file uses os.environ[...] but backend/.env has no EXPO_* keys; iteration9 tests handle this by loading /app/frontend/.env as a fallback."
+  ],
+  "critical_code_review_comments": [
+    "server.py:155-169 BookmarkIn.post_id and HistoryIn.post_id are correctly typed as `str` — Pydantic will coerce numeric JSON to string, which is the desired behavior for legacy int payloads from older frontend builds.",
+    "server.py:444-448 & 486-490 both use `update_one({user_id, post_id}, {$set: doc}, upsert=True)` backed by the unique compound index at server.py:915-916 — clean idempotency guarantee, verified in test_add_is_idempotent_upsert.",
+    "server.py:452 DELETE route uses `post_id: str` path param — FastAPI passes the raw string, so dashes/letters like 'book-3d-retirement-income' work with no URL-encoding needed. Verified.",
+    "server.py:918-926 startup migration is bounded to `post_id: {$type: 'int'}` and iterates async cursor — safe and idempotent (subsequent restarts find no int docs). Verified end-to-end.",
+    "server.py:186 `db.users.find_one(..., {'_id': 0})` and lines 428/462/469 all exclude MongoDB _id from responses — verified test_list_returns_all_four_with_fields asserts `_id` not in response.",
+    "MINOR (not blocking): server.py has grown to 935 lines. When time permits, consider splitting routes/models/wp-proxy into modules per the 700-line guideline in code_review_guidelines.",
+    "MINOR (not blocking): server.py:907 uses deprecated FastAPI `@app.on_event('startup')` — modern FastAPI recommends lifespan context managers. Works fine today; upgrade later."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration9_bookmarks_history.py (created)",
+    "/app/test_reports/pytest/iteration9_results.xml (generated)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17)",
+    "frontend": "n/a (skipped per request)"
+  },
+  "seed_data_creation": "Test fixture inserts one user (user_id='test-bm-user', email='test-bm@x.local') and one 1-day session directly into MongoDB collections `users` and `user_sessions`. Fixture teardown deletes all docs with user_id='test-bm-user' from users/user_sessions/bookmarks/history. TestPostIdMigration additionally seeds/cleans user_id='test-bm-migration' with int post_ids 55555 and 77777 to verify the startup migration hook.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter9 test file lives at /app/backend/tests/test_iteration9_bookmarks_history.py. RUN WITH `-n 0` (serial) — the TestPostIdMigration class restarts the backend via `sudo supervisorctl restart backend` to exercise the on_startup migration hook, and this races with the other classes under pytest.ini's default `--dist loadscope`. Command: `pytest backend/tests/test_iteration9_bookmarks_history.py -n 0 -v`. Auth for /api/user/* endpoints: seed a session directly in Mongo (no username/password login — Google OAuth only); see the module fixture `session_token` for the pattern. All 4 content kinds are exercised end-to-end with these post_ids: 'book-3d-retirement-income' (book), 'mag-rmag-vol-1' (magazine), '12345' (article), '67890' (video).",
+  "rca_of_issue": "N/A — this iteration is a feature-verification pass, not a bug fix. The refactor to string post_ids is fully functional: bookmarks/history accept all 4 kinds (book/magazine/article/video) as strings, idempotency is enforced by the compound unique index, path-param DELETE works for dashed ids, ordering is desc by created_at/updated_at, and existing int post_ids are auto-migrated to strings on backend startup."
+}

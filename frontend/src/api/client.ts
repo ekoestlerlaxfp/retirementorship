@@ -150,12 +150,12 @@ export const api = {
       body: JSON.stringify({ retirement_stage }),
     }),
   bookmarks: () => req<any[]>("/user/bookmarks"),
-  bookmarkIds: () => req<number[]>("/user/bookmarks/ids"),
-  addBookmark: (b: { post_id: number; title: string; image?: string; category?: string; type?: string }) =>
+  bookmarkIds: () => req<string[]>("/user/bookmarks/ids"),
+  addBookmark: (b: { post_id: string; title: string; image?: string | null; category?: string | null; type?: string }) =>
     req("/user/bookmarks", { method: "POST", body: JSON.stringify(b) }),
-  removeBookmark: (post_id: number) => req(`/user/bookmarks/${post_id}`, { method: "DELETE" }),
+  removeBookmark: (post_id: string) => req(`/user/bookmarks/${encodeURIComponent(post_id)}`, { method: "DELETE" }),
   history: () => req<any[]>("/user/history"),
-  addHistory: (h: { post_id: number; title: string; image?: string; category?: string; type?: string; progress?: number }) =>
+  addHistory: (h: { post_id: string; title: string; image?: string | null; category?: string | null; type?: string; progress?: number }) =>
     req("/user/history", { method: "POST", body: JSON.stringify(h) }),
 
   // Content types

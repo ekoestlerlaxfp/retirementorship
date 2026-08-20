@@ -6,11 +6,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing, type as typo, CALENDLY_URL } from "@/src/theme";
-import { cachedApi, type BookT } from "@/src/api/client";
+import { api, cachedApi, type BookT } from "@/src/api/client";
 import { BookCover } from "@/src/components/BookCover";
 import { CenteredLoader, GoldPill, Muted, PrimaryButton, SecondaryButton } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { bookProgress, type BookProgress, downloads, formatBytes } from "@/src/offline";
+import { useAuth } from "@/src/context/auth";
 import { Linking } from "react-native";
 
 export default function BookScreen() {
@@ -18,6 +19,8 @@ export default function BookScreen() {
   const [book, setBook] = useState<BookT | null>(null);
   const [progress, setProgress] = useState<BookProgress | null>(null);
   const [downloaded, setDownloaded] = useState<{ ready: boolean; bytes: number } | null>(null);
+  const [bookmarked, setBookmarked] = useState(false);
+  const { user } = useAuth();
 
   const refresh = useCallback(async (bookId: string) => {
     const p = await bookProgress.get(bookId);
@@ -37,12 +40,48 @@ export default function BookScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // When we have the book + user, record history and load bookmark state
+  useEffect(() => {
+    if (!book || !user) return;
+    const kind = String(book.id).startsWith("mag-") ? "magazine" : "book";
+    api.addHistory({
+      post_id: String(book.id),
+      title: book.title,
+      image: book.image || book.hero_image || null,
+      category: book.author || null,
+      type: kind,
+      progress: 0.02,
+    }).catch(() => {});
+    api.bookmarkIds().then((ids) => setBookmarked(ids.includes(String(book.id)))).catch(() => {});
+  }, [book, user]);
+
   // Refresh progress whenever this screen regains focus (returning from the reader)
   useFocusEffect(
     useCallback(() => {
       if (id) refresh(id);
     }, [id, refresh])
   );
+
+  const toggleBookmark = useCallback(async () => {
+    if (!book) return;
+    if (!user) { router.push("/(tabs)/profile"); return; }
+    const kind = String(book.id).startsWith("mag-") ? "magazine" : "book";
+    try {
+      if (bookmarked) {
+        await api.removeBookmark(String(book.id));
+        setBookmarked(false);
+      } else {
+        await api.addBookmark({
+          post_id: String(book.id),
+          title: book.title,
+          image: book.image || book.hero_image || null,
+          category: book.author || null,
+          type: kind,
+        });
+        setBookmarked(true);
+      }
+    } catch {}
+  }, [book, bookmarked, user]);
 
   if (!book) return <View style={styles.root}><CenteredLoader /></View>;
 
@@ -75,6 +114,13 @@ export default function BookScreen() {
               <Ionicons name="chevron-back" size={22} color="#FFF" />
             </Pressable>
             <View style={{ flex: 1 }} />
+            <Pressable testID="book-bookmark" onPress={toggleBookmark} style={styles.iconBtn} hitSlop={12}>
+              <Ionicons
+                name={bookmarked ? "bookmark" : "bookmark-outline"}
+                size={20}
+                color={bookmarked ? "#F0C673" : "#FFF"}
+              />
+            </Pressable>
             <Pressable testID="book-share" onPress={onShare} style={styles.iconBtn} hitSlop={12}>
               <Ionicons name="share-outline" size={20} color="#FFF" />
             </Pressable>
@@ -85,7 +131,7 @@ export default function BookScreen() {
         </View>
 
         <View style={styles.body}>
-          <GoldPill label="Book" testID="book-badge" />
+          <GoldPill label={String(book.id).startsWith("mag-") ? "Magazine" : "Book"} testID="book-badge" />
           <Text style={styles.title} testID="book-title">{book.title}</Text>
           {book.subtitle ? <Text style={styles.subtitle}>{book.subtitle}</Text> : null}
           {book.author ? <Text style={styles.author}>By {book.author}</Text> : null}

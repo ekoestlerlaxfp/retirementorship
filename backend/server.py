@@ -153,7 +153,7 @@ class OnboardingIn(BaseModel):
 
 
 class BookmarkIn(BaseModel):
-    post_id: int
+    post_id: str
     title: str
     image: Optional[str] = None
     category: Optional[str] = None
@@ -161,7 +161,7 @@ class BookmarkIn(BaseModel):
 
 
 class HistoryIn(BaseModel):
-    post_id: int
+    post_id: str
     title: str
     image: Optional[str] = None
     category: Optional[str] = None
@@ -450,7 +450,7 @@ async def user_bookmark_add(payload: BookmarkIn, authorization: Optional[str] = 
 
 
 @api_router.delete("/user/bookmarks/{post_id}")
-async def user_bookmark_remove(post_id: int, authorization: Optional[str] = Header(None)):
+async def user_bookmark_remove(post_id: str, authorization: Optional[str] = Header(None)):
     user = await require_user(authorization)
     await db.bookmarks.delete_one({"user_id": user["user_id"], "post_id": post_id})
     return {"ok": True}
@@ -915,6 +915,15 @@ async def on_startup():
         await db.bookmarks.create_index([("user_id", 1), ("post_id", 1)], unique=True)
         await db.history.create_index([("user_id", 1), ("post_id", 1)], unique=True)
         await db.book_progress.create_index([("user_id", 1), ("book_id", 1)], unique=True)
+        # One-time migration: convert any existing int post_ids to strings
+        try:
+            for coll_name in ("bookmarks", "history"):
+                coll = db[coll_name]
+                cursor = coll.find({"post_id": {"$type": "int"}}, {"_id": 1, "post_id": 1})
+                async for doc in cursor:
+                    await coll.update_one({"_id": doc["_id"]}, {"$set": {"post_id": str(doc["post_id"])}})
+        except Exception as mig_e:
+            logger.warning(f"post_id migration skipped: {mig_e}")
         logger.info("Indexes ensured")
     except Exception as e:
         logger.warning(f"Index setup: {e}")

@@ -79,21 +79,41 @@ export default function Library() {
           contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.brandPrimary} />}
         >
-          {items.map((it) => (
-            <Pressable
-              key={it.post_id}
-              testID={`library-item-${it.post_id}`}
-              onPress={() => router.push({ pathname: "/article/[id]", params: { id: String(it.post_id) } })}
-              style={({ pressed }) => [styles.row, pressed && { opacity: 0.9 }]}
-            >
-              <Image source={{ uri: it.image }} style={styles.rowImg} contentFit="cover" transition={200} />
-              <View style={{ flex: 1 }}>
-                {it.category && <Text style={styles.rowCat}>{String(it.category).toUpperCase()}</Text>}
-                <Text style={styles.rowTitle} numberOfLines={3}>{it.title}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </Pressable>
-          ))}
+          {items.map((it) => {
+            const isBookLike = it.type === "book" || it.type === "magazine" || String(it.post_id).startsWith("book-") || String(it.post_id).startsWith("mag-");
+            const target = isBookLike ? "/book/[id]" : "/article/[id]";
+            const typeLabel = it.type === "video" ? "VIDEO" : it.type === "magazine" ? "MAGAZINE" : it.type === "book" ? "BOOK" : (it.category ? String(it.category).toUpperCase() : "ARTICLE");
+            return (
+              <Pressable
+                key={String(it.post_id)}
+                testID={`library-item-${it.post_id}`}
+                onPress={() => router.push({ pathname: target as any, params: { id: String(it.post_id) } })}
+                style={({ pressed }) => [styles.row, pressed && { opacity: 0.9 }]}
+              >
+                {it.image ? (
+                  <Image source={{ uri: it.image }} style={styles.rowImg} contentFit="cover" transition={200} />
+                ) : (
+                  <View style={[styles.rowImg, { alignItems: "center", justifyContent: "center" }]}>
+                    <Ionicons
+                      name={it.type === "video" ? "play-circle" : it.type === "book" ? "book" : it.type === "magazine" ? "newspaper" : "document-text"}
+                      size={28}
+                      color={colors.brandPrimary}
+                    />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowCat}>{typeLabel}</Text>
+                  <Text style={styles.rowTitle} numberOfLines={3}>{it.title}</Text>
+                  {tab === "history" && typeof it.progress === "number" && it.progress > 0.02 ? (
+                    <View style={styles.progressWrap}>
+                      <View style={[styles.progressFill, { width: `${Math.min(100, Math.round(it.progress * 100))}%` }]} />
+                    </View>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
     </View>
@@ -136,6 +156,8 @@ const styles = StyleSheet.create({
   rowImg: { width: 80, height: 80, borderRadius: radius.sm, backgroundColor: colors.surfaceTertiary },
   rowCat: { color: colors.brandPrimary, fontWeight: "800", letterSpacing: 0.8, fontSize: 11, marginBottom: 4 },
   rowTitle: { fontSize: 15, fontWeight: "700", color: colors.onSurface, lineHeight: 20 },
+  progressWrap: { height: 4, backgroundColor: colors.surfaceTertiary, borderRadius: 2, marginTop: 8, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: colors.brandPrimary, borderRadius: 2 },
   signInWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   signInIcon: {
     width: 72, height: 72, borderRadius: 36,
