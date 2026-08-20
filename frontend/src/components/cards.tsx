@@ -17,7 +17,7 @@ export function HeroCard({ post }: { post: WPPost }) {
     <Pressable
       testID={`hero-card-${post.id}`}
       onPress={() => openPost(post)}
-      style={({ pressed }) => [styles.hero, pressed && { opacity: 0.95 }]}
+      style={({ pressed }) => [styles.hero, pressed && { transform: [{ scale: 0.985 }] }]}
     >
       <Image
         source={{ uri: post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=1200" }}
@@ -25,7 +25,12 @@ export function HeroCard({ post }: { post: WPPost }) {
         contentFit="cover"
         transition={300}
       />
-      <LinearGradient colors={["transparent", "rgba(35,31,32,0.85)"]} style={StyleSheet.absoluteFillObject} />
+      <LinearGradient
+        colors={["rgba(35,31,32,0)", "rgba(35,31,32,0.35)", "rgba(35,31,32,0.9)"]}
+        locations={[0, 0.55, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={styles.heroRing} pointerEvents="none" />
       <View style={styles.heroContent}>
         {post.category && <GoldPill label={post.category.name} />}
         <Text style={styles.heroTitle} numberOfLines={3}>
@@ -153,92 +158,103 @@ export function Rail<T>({
 const styles = StyleSheet.create({
   hero: {
     marginHorizontal: spacing.xl,
-    height: 380,
-    borderRadius: radius.lg,
+    height: 440,
+    borderRadius: radius.xl,
     overflow: "hidden",
     backgroundColor: colors.surfaceTertiary,
     ...shadow.hero,
   },
+  heroRing: {
+    position: "absolute",
+    left: 0, right: 0, top: 0, bottom: 0,
+    borderRadius: radius.xl,
+    borderWidth: 0.5,
+    borderColor: "rgba(197,160,89,0.35)",
+  },
   heroContent: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.xl, gap: spacing.md },
   heroTitle: {
     color: "#FFF",
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 38,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   heroMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.xs },
   heroMetaText: { color: "#F0E6D2", fontSize: 14, fontWeight: "600" },
-  artCard: {
-    width: 260,
-    backgroundColor: "transparent",
-  },
+  artCard: { width: 280, backgroundColor: "transparent" },
   artImageWrap: {
     width: "100%",
-    height: 160,
-    borderRadius: radius.md,
+    height: 176,
+    borderRadius: radius.lg,
     overflow: "hidden",
     backgroundColor: colors.surfaceTertiary,
     marginBottom: spacing.md,
+    borderWidth: 0.5,
+    borderColor: "rgba(0,0,0,0.04)",
   },
   artImage: { width: "100%", height: "100%" },
   artCategory: {
     color: colors.brandPrimary,
     fontSize: 11,
     fontWeight: "800",
-    letterSpacing: 0.8,
+    letterSpacing: 1.2,
     marginBottom: spacing.xs,
   },
   artTitle: {
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: "700",
     color: colors.onSurface,
     marginBottom: spacing.xs,
+    letterSpacing: -0.2,
   },
   artMeta: { fontSize: 13, color: colors.muted, fontWeight: "500" },
   playBadge: {
     position: "absolute",
     top: 12,
     right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(75,49,102,0.9)",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(75,49,102,0.92)",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,0.2)",
   },
   trendCard: {
-    width: 300,
+    width: 320,
     flexDirection: "row",
     gap: spacing.md,
     alignItems: "center",
     backgroundColor: colors.surfaceSecondary,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.lg,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: colors.border,
+    ...shadow.card,
   },
   trendRank: {
-    fontSize: 40,
+    fontSize: 44,
     fontWeight: "800",
     color: colors.brandPrimary,
     letterSpacing: -2,
-    width: 40,
+    width: 44,
   },
   trendTitle: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: "700",
     color: colors.onSurface,
     marginBottom: 4,
+    letterSpacing: -0.2,
   },
   tipCard: {
     marginHorizontal: spacing.xl,
     backgroundColor: colors.surfaceTertiary,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.xl,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: colors.brandTertiary,
     ...shadow.card,
   },
@@ -247,15 +263,15 @@ const styles = StyleSheet.create({
     color: colors.brandSecondary,
     fontWeight: "800",
     fontSize: 12,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   tipTitle: {
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: "800",
     color: colors.onSurface,
     marginBottom: spacing.md,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   tipExcerpt: { fontSize: 15, lineHeight: 22, color: colors.onSurface, opacity: 0.85 },
   tipCta: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.lg },

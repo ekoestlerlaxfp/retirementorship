@@ -3,32 +3,56 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Platform, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "@/src/theme";
 
-const TAB_BG = "rgba(250,248,245,0.94)";
+const TAB_BG = "rgba(255,253,250,0.88)";
 
 function TabBg() {
   if (Platform.OS === "ios") {
-    return <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFillObject} />;
+    return (
+      <View style={StyleSheet.absoluteFillObject}>
+        <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFillObject} />
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,253,250,0.35)" }]} />
+        <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+      </View>
+    );
   }
-  return <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG }]} />;
+  return (
+    <View style={StyleSheet.absoluteFillObject}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG, borderRadius: 28 }]} />
+      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+    </View>
+  );
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.brandSecondary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "700", marginBottom: 4 },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: "700", marginBottom: 2, letterSpacing: 0.1 },
+        tabBarItemStyle: { paddingVertical: 4 },
         tabBarStyle: {
           position: "absolute",
-          borderTopColor: colors.border,
-          borderTopWidth: 0.5,
-          height: Platform.OS === "ios" ? 84 : 68,
+          left: 16,
+          right: 16,
+          bottom: Math.max(16, insets.bottom + 8),
+          borderTopWidth: 0,
+          borderRadius: 28,
+          height: 68,
           paddingTop: 8,
+          paddingHorizontal: 8,
           backgroundColor: "transparent",
+          overflow: "hidden",
+          shadowColor: "#231F20",
+          shadowOpacity: 0.12,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 8,
         },
         tabBarBackground: () => <TabBg />,
       }}

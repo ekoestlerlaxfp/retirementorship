@@ -32,7 +32,10 @@ api_router = APIRouter(prefix="/api")
 
 # ---- simple in-process cache for WP responses ----
 _cache: Dict[str, tuple[float, Any]] = {}
-CACHE_TTL = 900  # 15 min
+CACHE_TTL = 180  # 3 min — WordPress is the source of truth; keep it fresh
+
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
+LEADS_WEBHOOK_URL = os.environ.get("LEADS_WEBHOOK_URL", "")
 
 
 async def wp_get(path: str, params: Optional[dict] = None, ttl: int = CACHE_TTL) -> Any:
@@ -211,6 +214,7 @@ async def auth_session(payload: SessionExchangeIn):
         raise HTTPException(status_code=401, detail="Missing user data")
 
     existing = await db.users.find_one({"email": email}, {"_id": 0})
+    is_new_user = False
     if existing:
         user_id = existing["user_id"]
         await db.users.update_one(
@@ -218,6 +222,7 @@ async def auth_session(payload: SessionExchangeIn):
             {"$set": {"name": name, "picture": picture, "last_login": utcnow()}},
         )
     else:
+        is_new_user = True
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
             "user_id": user_id,
@@ -225,6 +230,7 @@ async def auth_session(payload: SessionExchangeIn):
             "name": name,
             "picture": picture,
             "retirement_stage": None,
+            "source": "google",
             "created_at": utcnow(),
             "last_login": utcnow(),
         })
@@ -237,7 +243,29 @@ async def auth_session(payload: SessionExchangeIn):
     })
 
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+
+    # Fire the leads webhook (fire-and-forget) for new signups
+    if is_new_user and LEADS_WEBHOOK_URL:
+        asyncio.create_task(_fire_leads_webhook(user))
+
     return {"session_token": session_token, "user": user}
+
+
+async def _fire_leads_webhook(user: dict):
+    try:
+        payload = {
+            "email": user.get("email"),
+            "name": user.get("name"),
+            "picture": user.get("picture"),
+            "user_id": user.get("user_id"),
+            "retirement_stage": user.get("retirement_stage"),
+            "created_at": user.get("created_at").isoformat() if isinstance(user.get("created_at"), datetime) else user.get("created_at"),
+            "source": user.get("source", "google"),
+        }
+        async with httpx.AsyncClient(timeout=10.0) as hc:
+            await hc.post(LEADS_WEBHOOK_URL, json=payload)
+    except Exception as e:
+        logger.warning(f"Leads webhook failed: {e}")
 
 
 @api_router.get("/auth/me")
@@ -404,6 +432,66 @@ async def user_history_add(payload: HistoryIn, authorization: Optional[str] = He
 @api_router.get("/")
 async def root():
     return {"service": "RetireMentorship API", "ok": True}
+
+
+# ---- Admin: lead export ----
+def _check_admin(x_admin_key: Optional[str]) -> None:
+    if not ADMIN_API_KEY or not x_admin_key or x_admin_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=401, detail="Admin auth required")
+
+
+@api_router.get("/admin/leads")
+async def admin_leads(
+    x_admin_key: Optional[str] = Header(None),
+    limit: int = 200,
+    stage: Optional[str] = None,
+    q: Optional[str] = None,
+):
+    _check_admin(x_admin_key)
+    query: Dict[str, Any] = {}
+    if stage:
+        query["retirement_stage"] = stage
+    if q:
+        query["$or"] = [{"email": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]
+    cur = db.users.find(query, {"_id": 0}).sort("created_at", -1).limit(min(limit, 1000))
+    docs = await cur.to_list(1000)
+    total = await db.users.count_documents({})
+    return {"total": total, "count": len(docs), "leads": docs}
+
+
+@api_router.get("/admin/leads.csv")
+async def admin_leads_csv(x_admin_key: Optional[str] = Header(None)):
+    _check_admin(x_admin_key)
+    cur = db.users.find({}, {"_id": 0}).sort("created_at", -1)
+    docs = await cur.to_list(5000)
+    from io import StringIO
+    import csv
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(["email", "name", "retirement_stage", "created_at", "last_login", "user_id", "picture", "source"])
+    for d in docs:
+        w.writerow([
+            d.get("email", ""),
+            d.get("name", ""),
+            d.get("retirement_stage") or "",
+            d.get("created_at").isoformat() if isinstance(d.get("created_at"), datetime) else (d.get("created_at") or ""),
+            d.get("last_login").isoformat() if isinstance(d.get("last_login"), datetime) else (d.get("last_login") or ""),
+            d.get("user_id", ""),
+            d.get("picture") or "",
+            d.get("source") or "google",
+        ])
+    from fastapi.responses import Response
+    return Response(content=buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=retirementorship-leads.csv"})
+
+
+# ---- Freshness / sync helper ----
+@api_router.get("/wp/latest-modified")
+async def wp_latest_modified():
+    """Return the most recent post `modified` timestamp — cheap freshness check for clients."""
+    data = await wp_get("/posts", {"per_page": 1, "orderby": "modified", "order": "desc"}, ttl=60)
+    if not isinstance(data, list) or not data:
+        return {"modified": None}
+    return {"modified": (data[0] or {}).get("modified"), "id": (data[0] or {}).get("id")}
 
 
 app.include_router(api_router)

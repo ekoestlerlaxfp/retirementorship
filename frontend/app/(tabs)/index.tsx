@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, StyleSheet, ScrollView, RefreshControl, Pressable, Text } from "react-native";
+import { View, StyleSheet, ScrollView, RefreshControl, Pressable, Text, AppState } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, stages, BRAND } from "@/src/theme";
+import { colors, spacing, radius, stages, BRAND, shadow } from "@/src/theme";
 import { api, cachedApi, type HomeFeed } from "@/src/api/client";
 import { HeroCard, ArticleCard, TrendingCard, TipCard, Rail } from "@/src/components/cards";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
@@ -13,6 +13,17 @@ import { CenteredLoader, Muted, EmptyState } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
 import { progress as progressStore, type ProgressEntry } from "@/src/offline";
 import { Image as ExpoImage } from "expo-image";
+
+function formatSyncedAt(ts: number | null): string {
+  if (!ts) return "Syncing…";
+  const secs = Math.round((Date.now() - ts) / 1000);
+  if (secs < 60) return "Just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
 
 function ContinueCard({ entry }: { entry: ProgressEntry }) {
   return (
@@ -45,28 +56,45 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [continueReading, setContinueReading] = useState<ProgressEntry[]>([]);
+  const [lastSynced, setLastSynced] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const { user } = useAuth();
 
   const load = useCallback(async () => {
     const s = await AsyncStorage.getItem("rm_stage");
     setStage(s);
-    // Cache-first, then refresh
+    setSyncing(true);
+    // Cache-first, then refresh from WordPress (source of truth)
     await cachedApi.homeFeed(s, {
-      onCache: (cached) => {
-        if (cached) { setFeed(cached); setLoading(false); }
+      onCache: (cached, savedAt) => {
+        if (cached) { setFeed(cached); setLoading(false); setLastSynced(savedAt); }
       },
-      onFresh: (fresh) => { setFeed(fresh); setLoading(false); setRefreshing(false); },
-      onError: () => { setLoading(false); setRefreshing(false); },
+      onFresh: (fresh) => {
+        setFeed(fresh);
+        setLoading(false);
+        setRefreshing(false);
+        setLastSynced(Date.now());
+        setSyncing(false);
+      },
+      onError: () => { setLoading(false); setRefreshing(false); setSyncing(false); },
     });
     // Continue Reading rail (local progress)
     setContinueReading(await progressStore.recent(6));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Refresh on mount AND whenever the app returns to foreground.
+  useEffect(() => {
+    load();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") load();
+    });
+    return () => sub.remove();
+  }, [load]);
 
   const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);
 
   const stageLabel = stages.find((s) => s.id === stage)?.label;
+  const syncedLabel = formatSyncedAt(lastSynced);
 
   if (loading) return <View style={styles.root}><CenteredLoader /></View>;
   if (!feed || (!feed.hero && !feed.latest?.length)) {
@@ -82,13 +110,17 @@ export default function Home() {
     <View style={styles.root}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 140 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brandPrimary} />}
       >
         <SafeAreaView edges={["top"]}>
           <View style={styles.brandRow}>
             <Image source={{ uri: BRAND.logoUrl }} style={styles.brandLogo} contentFit="contain" transition={200} />
             <Text style={styles.brandName}>{BRAND.name}</Text>
+            <View style={styles.syncedPill} testID="last-synced-pill">
+              <View style={[styles.syncedDot, { backgroundColor: syncing ? colors.warning : colors.success }]} />
+              <Text style={styles.syncedText}>{syncing ? "Syncing…" : syncedLabel}</Text>
+            </View>
             <View style={{ flex: 1 }} />
             <Pressable
               testID="header-search-button"
@@ -96,7 +128,7 @@ export default function Home() {
               style={styles.iconBtn}
               hitSlop={12}
             >
-              <Ionicons name="search" size={22} color={colors.onSurface} />
+              <Ionicons name="search" size={20} color={colors.onSurface} />
             </Pressable>
           </View>
           <View style={styles.header}>
@@ -188,6 +220,18 @@ const styles = StyleSheet.create({
   },
   brandLogo: { width: 32, height: 22 },
   brandName: { color: colors.brandSecondary, fontWeight: "800", fontSize: 15, letterSpacing: 0.4 },
+  syncedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceTertiary,
+    marginLeft: 6,
+  },
+  syncedDot: { width: 6, height: 6, borderRadius: 3 },
+  syncedText: { color: colors.brandSecondary, fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
   header: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
@@ -195,14 +239,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  kicker: { color: colors.brandPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 1.2 },
+  kicker: { color: colors.brandPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 1.4 },
   tagline: {
-    marginTop: 6,
-    fontSize: 26,
-    lineHeight: 32,
+    marginTop: 8,
+    fontSize: 30,
+    lineHeight: 36,
     fontWeight: "800",
     color: colors.onSurface,
-    letterSpacing: -0.4,
+    letterSpacing: -0.6,
   },
   iconBtn: {
     width: 44,
@@ -211,7 +255,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: colors.border,
+    ...shadow.card,
   },
 });

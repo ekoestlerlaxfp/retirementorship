@@ -15,6 +15,7 @@ import requests
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://wisdom-edge.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
+ADMIN_KEY = os.environ.get("ADMIN_API_KEY", "rm_admin_ChangeMe_2026")
 
 
 # ---- Shared fixtures ----
@@ -235,3 +236,75 @@ class TestHtmlDecoding:
         joined = " || ".join(p.get("title", "") for p in posts)
         for ent in ("&#8217;", "&amp;", "&#8216;", "&#038;", "&#8211;"):
             assert ent not in joined, f"entity {ent} found in titles: {joined}"
+
+
+# ---- Freshness endpoint (iteration 3) ----
+class TestWPLatestModified:
+    def test_latest_modified_returns_iso_and_id(self, api_client):
+        # cold cache may return null once; retry once with 3s pause per request spec
+        body = None
+        for attempt in range(2):
+            r = api_client.get(f"{API}/wp/latest-modified", timeout=30)
+            assert r.status_code == 200, r.text
+            body = r.json()
+            if body.get("modified"):
+                break
+            time.sleep(3)
+        assert body is not None
+        assert "modified" in body, "response missing `modified` key"
+        assert body["modified"], f"`modified` still null after retry: {body}"
+        assert isinstance(body["modified"], str) and "T" in body["modified"], \
+            f"modified not ISO-like: {body['modified']!r}"
+        assert "id" in body and isinstance(body["id"], int) and body["id"] > 0, \
+            f"missing/invalid `id`: {body.get('id')!r}"
+
+
+# ---- Admin lead-gen endpoints (iteration 3) ----
+class TestAdminLeads:
+    def test_admin_leads_without_key_returns_401(self):
+        r = requests.get(f"{API}/admin/leads", timeout=15)
+        assert r.status_code == 401, f"expected 401, got {r.status_code}: {r.text}"
+
+    def test_admin_leads_with_wrong_key_returns_401(self):
+        r = requests.get(
+            f"{API}/admin/leads",
+            headers={"X-Admin-Key": "totally_wrong_key_123"},
+            timeout=15,
+        )
+        assert r.status_code == 401, f"expected 401, got {r.status_code}: {r.text}"
+
+    def test_admin_leads_with_correct_key_returns_200_shape(self):
+        r = requests.get(
+            f"{API}/admin/leads",
+            headers={"X-Admin-Key": ADMIN_KEY},
+            timeout=15,
+        )
+        assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text}"
+        body = r.json()
+        for key in ("total", "count", "leads"):
+            assert key in body, f"missing `{key}` in response"
+        assert isinstance(body["total"], int)
+        assert isinstance(body["count"], int)
+        assert isinstance(body["leads"], list), f"leads not a list: {type(body['leads'])}"
+        # count should match len(leads)
+        assert body["count"] == len(body["leads"]), \
+            f"count mismatch: count={body['count']} len(leads)={len(body['leads'])}"
+
+    def test_admin_leads_csv_without_key_returns_401(self):
+        r = requests.get(f"{API}/admin/leads.csv", timeout=15)
+        assert r.status_code == 401, f"expected 401, got {r.status_code}: {r.text}"
+
+    def test_admin_leads_csv_with_correct_key_returns_csv(self):
+        r = requests.get(
+            f"{API}/admin/leads.csv",
+            headers={"X-Admin-Key": ADMIN_KEY},
+            timeout=15,
+        )
+        assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text}"
+        ctype = r.headers.get("content-type", "")
+        assert "text/csv" in ctype, f"expected text/csv Content-Type, got {ctype!r}"
+        body = r.text
+        first_line = body.splitlines()[0] if body else ""
+        expected = "email,name,retirement_stage,created_at,last_login,user_id,picture,source"
+        assert first_line.strip() == expected, \
+            f"CSV header mismatch. expected={expected!r} got={first_line!r}"

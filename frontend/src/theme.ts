@@ -27,8 +27,8 @@ export const colors = {
 } as const;
 
 export const type = {
-  family: undefined as string | undefined, // system font — better a11y for older users
-  sizes: { xs: 12, sm: 14, base: 17, lg: 20, xl: 24, "2xl": 32, "3xl": 40 },
+  family: undefined as string | undefined, // system font — SF Pro on iOS / Roboto on Android
+  sizes: { xs: 12, sm: 14, base: 17, lg: 20, xl: 26, "2xl": 34, "3xl": 44, "4xl": 56 },
   weights: {
     regular: "400" as const,
     medium: "500" as const,
@@ -48,19 +48,26 @@ export const spacing = {
   "3xl": 48,
 } as const;
 
-export const radius = { sm: 8, md: 16, lg: 24, pill: 999 } as const;
+export const radius = { sm: 12, md: 20, lg: 28, xl: 36, pill: 999 } as const;
 
 export const shadow = {
   card: {
     shadowColor: "#231F20",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   hero: {
     shadowColor: "#231F20",
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.14,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  floating: {
+    shadowColor: "#231F20",
+    shadowOpacity: 0.10,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 8 },
     elevation: 6,

@@ -5,41 +5,54 @@ The #1 retirement education mobile app. Not a financial planner app — an elega
 
 Tagline: **"Retire Successfully. Stay Successfully Retired."**
 
-## Phase 1 (MVP) — Delivered
-### User flows
+## Content pipeline — WordPress is the source of truth
+- All articles, videos, categories flow from `https://retirementorship.com/wp-json/wp/v2/*`.
+- Backend proxies with a 3-min in-memory cache, 429 stale-fallback, empty-search retry.
+- `GET /api/wp/latest-modified` gives the newest post's `modified` timestamp for cheap freshness checks.
+- Frontend uses **stale-while-revalidate**: instant paint from cache, then background refresh from WordPress on mount **AND** on every AppState `active` event (foreground) — new posts appear without any new app release.
+
+## Lead generation
+- Every Google sign-in captures **email + name + picture + user_id + retirement_stage** into MongoDB.
+- **Admin export**: `GET /api/admin/leads` (JSON) and `/api/admin/leads.csv` (CSV) gated by `X-Admin-Key` header (see `.env` `ADMIN_API_KEY`).
+- **Optional webhook**: set `LEADS_WEBHOOK_URL` in `.env` to fire a POST on every new signup — plug it into Zapier / Make / HubSpot / email.
+- Calendly CTA card is placed on Home, Tools, Profile, and the bottom of every article.
+
+## User flows (Phase 1 delivered)
 1. Guest onboarding → pick retirement stage → Home
-2. Home → hero, tip-of-day, **continue reading**, latest articles rail, videos rail, trending rail, advisor CTA, recommended rail
-3. Learn → featured category tiles + grid of all WP topics
-4. Category detail → 2-column article grid
-5. Article reader → hero/video, big title, meta, HTML body, **bookmark**, **share**, **save-for-offline** (cloud icon), advisor CTA. **Reading progress auto-tracked on scroll.**
-6. Global search → debounced WP search (with empty-retry)
-7. Tools → Compound Interest, Social Security Taxability, Mortgage (open in browser). RMD & Roth = "Soon"
-8. Library → Tabs Bookmarks / History; guest state prompts sign-in
-9. Profile → Avatar, name, stage badge; Google sign-in; **Downloads & storage** row; advisor CTA
-10. **Downloads & storage** screen — cached-items count, offline-download registry, reading-progress count, per-item delete + clear-cache
+2. Home → floating brand row w/ freshness pill · headline · **large hero (36px rounded)** · Today's Tip · Continue Reading (from local progress) · Latest · Videos · Trending · Advisor CTA · Recommended
+3. Learn → featured tiles + grid of WP topics
+4. Category → 2-column article grid
+5. Article reader → hero/YouTube, big title, meta, rich HTML, bookmark, share, save-for-offline (persists cover via expo-file-system), scroll-driven reading progress, advisor CTA
+6. Global search → debounced WP full-text, empty-retry safeguard
+7. Tools → 3 live calculators (WordPress-hosted, opened in system browser). RMD & Roth = "Soon"
+8. Library → Bookmarks / History tabs; guest state prompts sign-in
+9. Profile → Avatar, name, stage badge, Google sign-in, Downloads & storage, advisor CTA
+10. Downloads & storage — cached size, downloaded files, reading-progress count, delete + clear-cache
 
-### Offline system (this iteration)
-- **`src/offline/cache.ts`** — namespaced JSON KV cache with schema version, saved-at ms, and content version tag. Ships `staleWhileRevalidate(key, fetcher, { onCache, onFresh })`.
-- **`src/offline/progress.ts`** — per-post reading progress (0–1), throttled writes on scroll, powers "Continue reading" rail.
-- **`src/offline/downloads.ts`** — expo-file-system download manager. Persists PDFs / images to `documents/rm-downloads/`, tracks status, progress, bytes, version. Web falls back to registry-only.
-- **`cachedApi.homeFeed / categories / post / category`** — cache-first + background refresh. Every screen now paints instantly from cache when available, then updates.
-- **Version tracking**: backend now exposes `modified` on every WP post so future logic can compare and refresh selectively.
+## Design system (updated for Apple 2026 look)
+- Palette: warm cream `#FAF8F5`, gold `#C5A059`, deep purple `#4B3166` for CTAs
+- Radius scale: **sm 12, md 20, lg 28, xl 36** (chunkier than before)
+- Softer, deeper shadows (blur 20–32, low opacity)
+- **Floating pill tab bar** (rounded 28) with gold-tinted glass — sits above safe-area with 16pt inset
+- Base body 17pt, headline 30pt, hero 32pt — richer letter-spacing (-0.6 on displays)
+- Cards get 0.5px inner ring + light shadow for premium depth
+- Gold RM monogram logo in onboarding hero, home header, profile footer
 
-### Tech
-- **Backend**: FastAPI + Motor + httpx proxy over `retirementorship.com/wp-json/wp/v2/*` with 15-min in-memory cache + stale fallback + empty-search retry. Emergent Google Auth. User endpoints for onboarding, bookmarks, history.
-- **Frontend**: Expo SDK 54 + expo-router. `react-native-render-html`, `react-native-webview`, `expo-file-system`, `expo-image`, `expo-secure-store`. `SafeAreaProvider` everywhere.
-- **Design**: Warm cream `#FAF8F5`, gold `#C5A059`, deep purple `#4B3166` for CTAs. 17pt base, 48pt touch targets. Gold RM monogram logo in onboarding hero, home header, profile footer.
+## Offline / caching (from prior iteration, still active)
+- `src/offline/cache.ts` — namespaced JSON KV cache, `staleWhileRevalidate`
+- `src/offline/progress.ts` — per-post scroll progress → Continue Reading rail
+- `src/offline/downloads.ts` — expo-file-system binary downloads registry (ready for books/magazines/PDFs)
 
-### Env
-- Backend: `MONGO_URL`, `DB_NAME`
+## Env
+- Backend: `MONGO_URL`, `DB_NAME`, `ADMIN_API_KEY`, `LEADS_WEBHOOK_URL`
 - Frontend: `EXPO_PUBLIC_BACKEND_URL`
 - Calendly URL configurable in `/app/frontend/src/theme.ts` (`CALENDLY_URL`)
 - Brand assets in `BRAND` constant in same file
 
-## Phase 2 (backlog)
+## Phase 2 backlog
 - Native interactive calculators (RMD, Roth, Retirement Income)
-- Books, magazines, podcasts (needs WP custom post types — download system is already ready)
+- Books, magazines, podcasts (needs WP custom post types — download system is ready)
 - Flowchart pinch-zoom viewer
 - Push notifications (Emergent-managed)
-- AI retirement coach (Claude via Emergent key) — answers from published content only
+- AI retirement coach (Claude via Emergent key)
 - Advisor directory, workshop registration
