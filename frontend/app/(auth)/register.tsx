@@ -28,8 +28,14 @@ export default function RegisterScreen() {
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     setBusy(true);
     try {
-      await register({ first_name: first, last_name: last, email, phone, password });
-      router.replace({ pathname: "/(auth)/verify", params: { email: email.trim() } });
+      const res = await register({ first_name: first, last_name: last, email, phone, password });
+      router.replace({
+        pathname: "/(auth)/verify",
+        params: {
+          email: email.trim(),
+          email_error: res.email_sent ? "" : (res.email_error || "1"),
+        },
+      });
     } catch (e: any) {
       const msg = String(e?.message || "");
       const m = msg.match(/API 4\d\d:\s*(.+)/);

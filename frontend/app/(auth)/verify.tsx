@@ -10,14 +10,16 @@ import { useAuth } from "@/src/context/auth";
 const LEN = 6;
 
 export default function VerifyScreen() {
-  const { email: rawEmail } = useLocalSearchParams<{ email?: string }>();
+  const { email: rawEmail, email_error: rawErr } = useLocalSearchParams<{ email?: string; email_error?: string }>();
   const email = String(rawEmail || "");
+  const initialDeliveryWarn = String(rawErr || "");
   const { verify, resendCode } = useAuth();
 
   const [digits, setDigits] = useState<string[]>(Array(LEN).fill(""));
   const inputs = useRef<Array<TextInput | null>>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialDeliveryWarn && initialDeliveryWarn !== "1" ? initialDeliveryWarn : null);
+  const [deliveryWarn, setDeliveryWarn] = useState<boolean>(!!initialDeliveryWarn);
   const [cooldown, setCooldown] = useState(30);
   const [resent, setResent] = useState(false);
 
@@ -78,11 +80,26 @@ export default function VerifyScreen() {
 
   const onResend = useCallback(async () => {
     if (cooldown > 0 || !email) return;
+    setError(null);
     try {
       await resendCode(email);
       setResent(true);
+      setDeliveryWarn(false);
       setCooldown(30);
-    } catch { /* silent */ }
+    } catch (e: any) {
+      const msg = String(e?.message || "");
+      const m = msg.match(/API 4\d\d:|API 5\d\d:/);
+      let detail = "We couldn't send the code. Double-check the email address is correct.";
+      try {
+        const idx = msg.indexOf(":");
+        if (idx >= 0) {
+          const j = JSON.parse(msg.slice(idx + 1).trim());
+          detail = j.detail || detail;
+        }
+      } catch {}
+      setError(detail);
+      setDeliveryWarn(true);
+    }
   }, [cooldown, email, resendCode]);
 
   return (
@@ -104,6 +121,15 @@ export default function VerifyScreen() {
               <Text style={{ color: colors.onSurface, fontWeight: "700" }}>{email}</Text>
             </Muted>
           </View>
+
+          {deliveryWarn && !resent ? (
+            <View style={styles.warn} testID="verify-delivery-warn">
+              <Ionicons name="warning" size={18} color="#B03030" />
+              <Text style={styles.warnText}>
+                We had trouble sending the email. Check your inbox and spam folder, or tap Resend below. If it keeps failing, double-check the email address.
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.digits}>
             {digits.map((d, i) => (
@@ -172,6 +198,18 @@ const styles = StyleSheet.create({
     fontSize: 24, fontWeight: "800", color: colors.onSurface,
   },
   digitFilled: { borderColor: colors.brandPrimary, backgroundColor: colors.surfaceTertiary },
+  warn: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: "rgba(176,48,48,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(176,48,48,0.25)",
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+  },
+  warnText: { flex: 1, color: "#8A2323", fontSize: 13, lineHeight: 18, fontWeight: "500" },
   error: { color: "#B03030", fontWeight: "600", textAlign: "center", marginBottom: spacing.md },
   info: { color: colors.brandSecondary, fontWeight: "600", textAlign: "center", marginBottom: spacing.md },
   linkStrong: { color: colors.brandPrimary, fontWeight: "800", fontSize: 15 },

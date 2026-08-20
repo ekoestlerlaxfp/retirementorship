@@ -382,8 +382,10 @@ async def _fire_leads_webhook(user: dict):
         logger.warning(f"Leads webhook failed: {e}")
 
 
-async def _send_verification(user: dict) -> None:
-    """Generate a fresh 6-digit code, invalidate old ones, and email it."""
+async def _send_verification(user: dict) -> bool:
+    """Generate a fresh 6-digit code, invalidate old ones, and email it.
+    Returns True if the email service accepted the send, False otherwise.
+    """
     email = user["email"]
     code = _new_code()
     t = utcnow()
@@ -403,11 +405,29 @@ async def _send_verification(user: dict) -> None:
     })
     try:
         await send_verification_email(to=email, first_name=user.get("first_name") or "there", code=code)
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {"last_email_status": "sent", "last_email_at": utcnow(), "last_email_error": None}},
+        )
+        return True
+    except httpx.HTTPStatusError as e:
+        err = f"HTTP {e.response.status_code} {e.response.text[:200]}"
+        logger.error(f"send_verification_email failed for {email}: {err}")
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {"last_email_status": "failed", "last_email_at": utcnow(), "last_email_error": err}},
+        )
+        return False
     except Exception as e:
         logger.error(f"send_verification_email failed for {email}: {e}")
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {"last_email_status": "failed", "last_email_at": utcnow(), "last_email_error": str(e)[:200]}},
+        )
+        return False
 
 
-async def _send_reset(user: dict) -> None:
+async def _send_reset(user: dict) -> bool:
     email = user["email"]
     code = _new_code()
     t = utcnow()
@@ -427,8 +447,10 @@ async def _send_reset(user: dict) -> None:
     })
     try:
         await send_password_reset_email(to=email, first_name=user.get("first_name") or "there", code=code)
+        return True
     except Exception as e:
         logger.error(f"send_password_reset_email failed for {email}: {e}")
+        return False
 
 
 # ---- Auth routes ----
@@ -459,11 +481,19 @@ async def auth_register(payload: RegisterIn):
         # unique-index race
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
 
-    # Fire the verification email and the lead webhook (both non-blocking).
-    asyncio.create_task(_send_verification(doc))
+    # Fire the lead webhook non-blocking.
     asyncio.create_task(_fire_leads_webhook(doc))
 
-    return {"user": _public_user(doc), "verification_required": True}
+    # AWAIT the verification email so we can surface delivery failures immediately.
+    email_ok = await _send_verification(doc)
+
+    resp: dict = {"user": _public_user(doc), "verification_required": True, "email_sent": email_ok}
+    if not email_ok:
+        resp["email_error"] = (
+            "We couldn't email your verification code (the address may be blocked or misspelled). "
+            "Check the address, then tap Resend code."
+        )
+    return resp
 
 
 @api_router.post("/auth/verify")
@@ -501,22 +531,31 @@ async def auth_verify(payload: VerifyIn):
 async def auth_resend_code(payload: ResendCodeIn):
     email = _norm_email(payload.email)
     user = await db.users.find_one({"email": email}, {"_id": 0})
-    # Enumeration-resistant: same response regardless.
-    if user and not user.get("verified"):
-        # Cooldown: skip if a code was created in the last N seconds.
-        last = await db.user_verification_codes.find_one(
-            {"user_id": user["user_id"], "purpose": "verify"},
-            sort=[("created_at", -1)],
+    if not user or user.get("verified"):
+        # Enumeration-resistant for unknown/verified emails.
+        return {"ok": True, "sent": True}
+
+    # Cooldown: skip a real send if a code was created in the last N seconds.
+    last = await db.user_verification_codes.find_one(
+        {"user_id": user["user_id"], "purpose": "verify"},
+        sort=[("created_at", -1)],
+    )
+    if last:
+        created = last.get("created_at")
+        if isinstance(created, datetime):
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if (utcnow() - created).total_seconds() < RESEND_COOLDOWN_SEC:
+                # Tell caller we throttled so UI doesn't show a misleading "sent!" toast.
+                return {"ok": True, "sent": True, "throttled": True}
+
+    sent = await _send_verification(user)
+    if not sent:
+        raise HTTPException(
+            status_code=502,
+            detail="We couldn't send the verification email. Check the address for typos, or contact support.",
         )
-        if last:
-            created = last.get("created_at")
-            if isinstance(created, datetime):
-                if created.tzinfo is None:
-                    created = created.replace(tzinfo=timezone.utc)
-                if (utcnow() - created).total_seconds() < RESEND_COOLDOWN_SEC:
-                    return {"ok": True}
-        asyncio.create_task(_send_verification(user))
-    return {"ok": True}
+    return {"ok": True, "sent": True}
 
 
 @api_router.post("/auth/login")
@@ -532,7 +571,7 @@ async def auth_login(payload: LoginIn):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     if not user.get("verified"):
         # Trigger a fresh code so they can complete verification.
-        asyncio.create_task(_send_verification(user))
+        await _send_verification(user)
         raise HTTPException(status_code=403, detail="Please verify your email first — we've resent your code.")
     await _clear_login_attempts(key)
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"last_login": utcnow()}})
@@ -546,7 +585,7 @@ async def auth_forgot(payload: ForgotIn):
     email = _norm_email(payload.email)
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if user:
-        asyncio.create_task(_send_reset(user))
+        await _send_reset(user)
     return {"ok": True}
 
 
