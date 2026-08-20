@@ -26,9 +26,9 @@ function TabBg() {
   );
 }
 
-// Centered icon wrapper — react-navigation reserves a tiny amount of label
-// space even with `tabBarShowLabel: false` on some SDK builds. We take a small
-// slice back with `marginBottom` so the icon sits visually centered in the pill.
+// Centered icon wrapper — the react-navigation tab item still reserves label
+// space even with `tabBarShowLabel: false`, which pushes icons upward. Wrapping
+// in a `flex: 1` centered box + a negative marginBottom compensates for it.
 const iconCenter: any = {
   flex: 1,
   alignItems: "center",
@@ -36,7 +36,7 @@ const iconCenter: any = {
   alignSelf: "stretch",
   width: "100%",
   height: "100%",
-  marginBottom: -4,
+  marginBottom: -14, // reclaim label placeholder space
 };
 
 function TabIcon({ name, color, size = 24 }: { name: keyof typeof Ionicons.glyphMap; color: string; size?: number }) {
@@ -56,7 +56,7 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.brandSecondary,
         tabBarInactiveTintColor: colors.muted,
         tabBarShowLabel: false,
-        tabBarLabelStyle: { display: "none", height: 0, margin: 0, padding: 0 },
+        tabBarLabelStyle: { display: "none" },
         tabBarItemStyle: {
           paddingVertical: 0,
           paddingTop: 0,
@@ -71,7 +71,7 @@ export default function TabsLayout() {
           bottom: Math.max(16, insets.bottom + 8),
           borderTopWidth: 0,
           borderRadius: 28,
-          height: 60,
+          height: 52,
           paddingTop: 0,
           paddingBottom: 0,
           paddingHorizontal: 8,
