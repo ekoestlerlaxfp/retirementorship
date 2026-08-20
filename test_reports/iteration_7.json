@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 7 backend + frontend testing complete. Backend: 8/8 pytest tests passed (100%). Verified /api/books returns 2 seeded books both with author == 'Freeman Linde, CFP\u00ae' (correct ® symbol), each with non-empty pdf_url starting with http and type=='book'; /api/books/book-3d-retirement-income and /api/books/book-tax-saving-strategies each return author 'Freeman Linde, CFP®'; /api/videos?limit=5 returns items with type=='video' and content_html containing 'youtube.com/embed/', 'youtu.be/', or 'youtube.com/watch?v='; regressions confirmed: /api/wp/home-feed rails hero/tip/videos/trending/recommended are cross-rail disjoint, /api/wp/latest-modified returns ISO modified + int id, /api/admin/leads gated by X-Admin-Key (rm_admin_ChangeMe_2026). Frontend Playwright on preview @390x844: (1) Bookshelf 2-col layout — both book-cover testIDs render side-by-side at identical y=1121.6 (y_diff=0px, well within 20px); (2) Covers show 'FREEMAN LINDE, CFP®' text (case-insensitive match confirmed); (3) Magazines tab shows 'Beautifully curated semi-annual issues will land here.' and 'quarterly' is absent from the whole document; (4) Videos tab renders 19 learn-video-<id> cards each 342px wide (>=300 requirement met at 390 viewport, i.e., near-full-width vertical list); (5) Tapping first video navigates to article screen where testID='article-video' is a native <iframe> whose src is 'https://www.youtube.com/embed/8qUyB_eOM5k?playsinline=1&modestbranding=1&rel=0' — CrossWebView web path works.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7_author_and_videos.py",
+    "/app/test_reports/pytest/iteration7_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BOOK_FALLBACK (server.py:495-517) hardcodes author as top-level string 'Freeman Linde, CFP®'. This works for the current API contract but note that WP-sourced posts expose author as a dict {name, avatar}. If books ever migrate to WP CPT with an 'author' meta, _transform_cpt must normalize the shape to match — tests accept both shapes but frontend likely reads book.author as string.",
+    "MagazinesSection (learn.tsx:137-164) shows 'semi-annual' copy correctly when mags==[]; if magazines CPT ever goes live the ComingSoon branch is skipped so the semi-annual messaging quietly disappears — acceptable but worth a design note.",
+    "CrossWebView web-path renders a raw <iframe testID='article-video' src=youtube.com/embed/...> which correctly plays YouTube videos in preview. Verified with video id 8qUyB_eOM5k. No red-screen or blank iframe observed.",
+    "Videos rail on Learn tab now uses styles.videoList (vertical stack) with card width ~342 at 390 viewport (>=300 required). Previous 2-col left-hugged grid is gone."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration7_author_and_videos.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (5/5 checks)"},
+  "seed_data_creation": "none — used existing BOOK_FALLBACK seed data and live WP posts for videos.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter7 pytest at /app/backend/tests/test_iteration7_author_and_videos.py covers author=='Freeman Linde, CFP®' on /api/books + /api/books/{slug} and youtube embed presence in /api/videos content_html. Frontend Playwright verified: 2-col Bookshelf via bounding-box y_diff<=20, video card width>=300, article-video iframe src contains youtube.com/embed/. All flows working end-to-end on https://wisdom-edge.preview.emergentagent.com. Video id 8qUyB_eOM5k used for article iframe verification (first video returned by /api/videos at test time).",
+  "rca_of_issue": "N/A — no failures. Initial Magazines tab text check false-negatived because the click ran before the section had a chance to render its ComingSoon subtitle; re-tested with a 4s settling wait and both 'semi-annual' presence and 'quarterly' absence confirmed."
+}

@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from "
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import WebView, { WebViewMessageEvent } from "react-native-webview";
+import type { WebViewMessageEvent } from "react-native-webview";
 import { colors, radius, spacing } from "@/src/theme";
 import { api, cachedApi, type BookT } from "@/src/api/client";
 import { CenteredLoader } from "@/src/components/ui";
+import { CrossWebView } from "@/src/components/CrossWebView";
 import { bookProgress, downloads } from "@/src/offline";
 
 // Minimal PDF.js reader. Uses the ES-module build so we can render pages onto
@@ -227,51 +228,8 @@ export default function BookReader() {
   );
 }
 
-// react-native-webview doesn't ship a web build. On web preview we render a raw iframe with srcDoc.
 function WebViewOrIframe({ html, onMessage }: { html: string; onMessage: (evt: WebViewMessageEvent) => void }) {
-  if (Platform.OS === "web") {
-    // Bridge iframe postMessage → same shape as react-native-webview's onMessage.
-    const ref = React.useRef<any>(null);
-    React.useEffect(() => {
-      const listener = (e: MessageEvent) => {
-        if (!e.data || typeof e.data !== "string") return;
-        try {
-          JSON.parse(e.data);
-          onMessage({ nativeEvent: { data: e.data } } as any);
-        } catch {}
-      };
-      window.addEventListener("message", listener);
-      return () => window.removeEventListener("message", listener);
-    }, [onMessage]);
-    // Patch html so the iframe uses window.parent.postMessage instead of ReactNativeWebView
-    const iframeHtml = html.replace(
-      "window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(msg))",
-      "window.parent.postMessage(JSON.stringify(msg), '*')"
-    );
-    return React.createElement("iframe", {
-      ref,
-      srcDoc: iframeHtml,
-      style: { flex: 1, border: 0, backgroundColor: "#231F20", width: "100%", height: "100%" },
-      sandbox: "allow-scripts allow-same-origin",
-    });
-  }
-  return (
-    <WebView
-      testID="reader-webview"
-      source={{ html, baseUrl: "https://retirementorship.com/" }}
-      originWhitelist={["*"]}
-      javaScriptEnabled
-      domStorageEnabled
-      allowFileAccess
-      allowFileAccessFromFileURLs
-      allowUniversalAccessFromFileURLs
-      mixedContentMode="always"
-      setSupportMultipleWindows={false}
-      onMessage={onMessage}
-      style={styles.webview}
-      androidLayerType={Platform.OS === "android" ? "hardware" : undefined}
-    />
-  );
+  return <CrossWebView html={html} onMessage={onMessage} style={styles.webview as any} />;
 }
 
 const styles = StyleSheet.create({

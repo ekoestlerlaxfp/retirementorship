@@ -227,7 +227,7 @@ export default function Home() {
           <Rail
             testID="rail-magazines"
             title="Magazines"
-            subtitle="Beautifully curated quarterly issues"
+            subtitle="Beautifully curated semi-annual issues"
             data={magazines}
             renderItem={(m) => <MagazineCover mag={m} />}
           />

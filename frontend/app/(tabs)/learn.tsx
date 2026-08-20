@@ -142,7 +142,7 @@ function MagazinesSection({ mags }: { mags: MagazineT[] | null }) {
         <ComingSoon
           icon="newspaper-outline"
           title="Magazines coming soon"
-          subtitle="Beautifully curated quarterly issues will land here."
+          subtitle="Beautifully curated semi-annual issues will land here."
         />
         <View style={styles.mockShelf}>
           <MockMagazine title="ISSUE 01" tagline="Living the retirement you designed" />
@@ -169,15 +169,15 @@ function VideosSection({ videos }: { videos: WPPost[] | null }) {
     return <ComingSoon icon="play-circle-outline" title="No videos yet" subtitle="Video lessons will appear here." />;
   }
   return (
-    <View style={styles.grid}>
+    <View style={styles.videoList}>
       {videos.map((v) => (
         <Pressable
           key={v.id}
           testID={`learn-video-${v.id}`}
           onPress={() => router.push({ pathname: "/article/[id]", params: { id: String(v.id) } })}
-          style={({ pressed }) => [styles.videoCell, pressed && { transform: [{ scale: 0.98 }] }]}
+          style={({ pressed }) => [styles.videoRow, pressed && { transform: [{ scale: 0.985 }] }]}
         >
-          <View style={styles.videoThumb}>
+          <View style={styles.videoRowThumb}>
             {v.image ? (
               <Image source={{ uri: v.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
             ) : (
@@ -185,12 +185,18 @@ function VideosSection({ videos }: { videos: WPPost[] | null }) {
             )}
             <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]} style={StyleSheet.absoluteFillObject} />
             <View style={styles.playBadge}>
-              <Ionicons name="play" size={20} color="#FFF" />
+              <Ionicons name="play" size={22} color="#FFF" />
             </View>
           </View>
-          {v.category ? <Text style={styles.videoCat}>{v.category.name.toUpperCase()}</Text> : null}
-          <Text style={styles.cellTitle} numberOfLines={3}>{v.title}</Text>
-          <Text style={styles.videoMeta}>Watch now</Text>
+          <View style={{ paddingHorizontal: 4, paddingTop: spacing.md }}>
+            {v.category ? <Text style={styles.videoCat}>{v.category.name.toUpperCase()}</Text> : null}
+            <Text style={styles.videoRowTitle} numberOfLines={3}>{v.title}</Text>
+            {v.excerpt ? <Text style={styles.videoRowExcerpt} numberOfLines={2}>{v.excerpt}</Text> : null}
+            <View style={styles.videoRowMeta}>
+              <Ionicons name="play-circle" size={14} color={colors.brandSecondary} />
+              <Text style={styles.videoRowMetaText}>Watch now · {v.reading_time || 1} min</Text>
+            </View>
+          </View>
         </Pressable>
       ))}
     </View>
@@ -267,20 +273,31 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
-    gap: spacing.xl,
+    rowGap: spacing.xl,
     justifyContent: "space-between",
   },
-  gridCell: { width: "47%" },
-  videoCell: { width: "47%" },
-  videoThumb: {
+  gridCell: { width: "48%" },
+  videoList: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.xl },
+  videoRow: { width: "100%" },
+  videoRowThumb: {
     width: "100%",
-    aspectRatio: 16 / 10,
+    aspectRatio: 16 / 9,
     borderRadius: radius.md,
     overflow: "hidden",
     backgroundColor: colors.surfaceTertiary,
-    marginBottom: spacing.md,
     ...shadow.card,
   },
+  videoRowTitle: {
+    marginTop: 4,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: colors.onSurface,
+    letterSpacing: -0.3,
+  },
+  videoRowExcerpt: { marginTop: 6, fontSize: 14, lineHeight: 20, color: colors.muted },
+  videoRowMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  videoRowMetaText: { color: colors.brandSecondary, fontSize: 13, fontWeight: "700" },
   playBadge: {
     position: "absolute",
     top: "50%",

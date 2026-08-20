@@ -11,6 +11,7 @@ import { colors, spacing, radius, type as typo } from "@/src/theme";
 import { api, cachedApi, WPPost } from "@/src/api/client";
 import { CenteredLoader, GoldPill, Muted } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
+import { CrossWebView } from "@/src/components/CrossWebView";
 import { useAuth } from "@/src/context/auth";
 import { progress as progressStore, downloads } from "@/src/offline";
 
@@ -182,12 +183,11 @@ export default function ArticleScreen() {
       >
         {youtubeId ? (
           <View style={styles.videoWrap}>
-            <WebView
+            <CrossWebView
               testID="article-video"
-              source={{ uri: `https://www.youtube.com/embed/${youtubeId}?playsinline=1&modestbranding=1&rel=0` }}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              style={styles.video}
+              uri={`https://www.youtube.com/embed/${youtubeId}?playsinline=1&modestbranding=1&rel=0`}
+              allowFullscreen
+              style={styles.video as any}
             />
           </View>
         ) : post.image ? (
