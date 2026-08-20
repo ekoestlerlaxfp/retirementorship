@@ -14,14 +14,14 @@ function TabBg() {
       <View style={StyleSheet.absoluteFillObject}>
         <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFillObject} />
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,253,250,0.35)" }]} />
-        <View style={[StyleSheet.absoluteFillObject, { borderRadius: 26, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+        <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
       </View>
     );
   }
   return (
     <View style={StyleSheet.absoluteFillObject}>
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG, borderRadius: 26 }]} />
-      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 26, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG, borderRadius: 28 }]} />
+      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
     </View>
   );
 }
@@ -48,8 +48,8 @@ export default function TabsLayout() {
           right: 16,
           bottom: Math.max(16, insets.bottom + 8),
           borderTopWidth: 0,
-          borderRadius: 26,
-          height: 52,
+          borderRadius: 28,
+          height: 60,
           paddingTop: 0,
           paddingBottom: 0,
           paddingHorizontal: 8,
