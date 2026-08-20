@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, StyleSheet, ScrollView, RefreshControl, Pressable, Text, AppState } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,7 +11,7 @@ import { HeroCard, ArticleCard, TrendingCard, TipCard, Rail } from "@/src/compon
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { CenteredLoader, Muted, EmptyState } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
-import { progress as progressStore, type ProgressEntry, bookProgress, type BookProgress } from "@/src/offline";
+import { progress as progressStore, type ProgressEntry, bookProgress, type BookProgress, useCompleted } from "@/src/offline";
 import { Image as ExpoImage } from "expo-image";
 import { BookCover, MagazineCover } from "@/src/components/BookCover";
 
@@ -63,6 +63,13 @@ export default function Home() {
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const { user } = useAuth();
+  const { set: completedIds } = useCompleted();
+
+  // Hide any item the user has marked complete from the "Continue reading" rail.
+  const continueReadingVisible = useMemo(
+    () => continueReading.filter((p) => !completedIds.has(String(p.post_id))),
+    [continueReading, completedIds]
+  );
 
   const load = useCallback(async () => {
     const s = await AsyncStorage.getItem("rm_stage");
@@ -194,12 +201,12 @@ export default function Home() {
           />
         )}
 
-        {continueReading.length > 0 && (
+        {continueReadingVisible.length > 0 && (
           <Rail
             testID="rail-continue"
             title="Continue reading"
             subtitle="Pick up where you left off"
-            data={continueReading}
+            data={continueReadingVisible}
             renderItem={(p) => (
               <ContinueCard entry={p} />
             )}
