@@ -40,6 +40,15 @@ export default function LoginScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <SafeAreaView style={styles.root} edges={["top"]}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <Pressable
+            testID="login-back"
+            onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
+            style={styles.backBtn}
+            hitSlop={12}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
+          </Pressable>
+
           <View style={styles.brand}>
             <Image source={{ uri: BRAND.logoUrl }} style={styles.logo} contentFit="contain" transition={200} />
             <Text style={styles.kicker}>WELCOME BACK</Text>
@@ -106,18 +115,30 @@ export function Field(props: {
   autoComplete?: any; testID?: string; rightIcon?: keyof typeof Ionicons.glyphMap; onPressRight?: () => void;
   maxLength?: number;
 }) {
+  const {
+    label, value, onChangeText, placeholder, keyboardType, secureTextEntry,
+    autoCapitalize, autoComplete, testID, rightIcon, onPressRight, maxLength,
+  } = props;
   return (
     <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.fieldInner}>
         <TextInput
-          {...props}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize={autoCapitalize}
+          autoComplete={autoComplete}
+          testID={testID}
+          maxLength={maxLength}
           style={styles.input}
           placeholderTextColor={colors.muted}
         />
-        {props.rightIcon ? (
-          <Pressable onPress={props.onPressRight} hitSlop={12} style={styles.rightIconBtn}>
-            <Ionicons name={props.rightIcon} size={20} color={colors.muted} />
+        {rightIcon ? (
+          <Pressable onPress={onPressRight} hitSlop={12} style={styles.rightIconBtn}>
+            <Ionicons name={rightIcon} size={20} color={colors.muted} />
           </Pressable>
         ) : null}
       </View>
@@ -128,18 +149,40 @@ export function Field(props: {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: spacing.xl, paddingBottom: spacing["3xl"] },
-  brand: { alignItems: "center", marginTop: spacing.lg, marginBottom: spacing["2xl"] },
+  backBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: colors.border,
+  },
+  brand: { alignItems: "center", marginTop: spacing.md, marginBottom: spacing.xl },
   logo: { width: 72, height: 48, marginBottom: spacing.md },
   kicker: { color: colors.brandPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 1.6 },
   form: { gap: spacing.md, marginTop: spacing.md },
   fieldWrap: { gap: 6 },
   fieldLabel: { color: colors.muted, fontSize: 12, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" },
-  fieldInner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
-  input: {
-    flex: 1, paddingHorizontal: spacing.lg, paddingVertical: 14,
-    fontSize: 16, color: colors.onSurface,
+  fieldInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 52,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  rightIconBtn: { paddingHorizontal: spacing.md, height: "100%", alignItems: "center", justifyContent: "center" },
+  input: {
+    flex: 1,
+    height: 52,
+    paddingHorizontal: spacing.lg,
+    fontSize: 16,
+    color: colors.onSurface,
+    // @ts-ignore — web-only: kill Chrome's outline halo
+    outlineStyle: "none" as any,
+  },
+  rightIconBtn: {
+    width: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   error: { color: "#B03030", fontWeight: "600", marginTop: 4 },
   link: { alignItems: "center", marginTop: spacing.md },
   linkText: { color: colors.brandSecondary, fontWeight: "600" },

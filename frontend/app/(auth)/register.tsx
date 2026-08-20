@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Pl
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, BRAND } from "@/src/theme";
 import { H1, Muted, PrimaryButton } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
@@ -42,6 +43,15 @@ export default function RegisterScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <SafeAreaView style={styles.root} edges={["top"]}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <Pressable
+            testID="reg-back"
+            onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
+            style={styles.backBtn}
+            hitSlop={12}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
+          </Pressable>
+
           <View style={styles.brand}>
             <Image source={{ uri: BRAND.logoUrl }} style={styles.logo} contentFit="contain" transition={200} />
             <Text style={styles.kicker}>JOIN RETIREMENTORSHIP</Text>
@@ -85,7 +95,7 @@ export default function RegisterScreen() {
             />
 
             <Text style={styles.legal}>
-              By continuing you agree to the {BRAND.name} terms and privacy policy. We'll email you a 6-digit verification code.
+              By continuing you agree to the {BRAND.name} terms and privacy policy. We&apos;ll email you a 6-digit verification code.
             </Text>
 
             <View style={styles.divider} />
@@ -106,8 +116,13 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: spacing.xl, paddingBottom: spacing["3xl"] },
-  brand: { alignItems: "center", marginTop: spacing.md, marginBottom: spacing.xl },
-  logo: { width: 72, height: 48, marginBottom: spacing.md },
+  backBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: colors.border,
+  },
+  brand: { alignItems: "center", marginTop: spacing.sm, marginBottom: spacing.lg },
+  logo: { width: 64, height: 40, marginBottom: spacing.sm },
   kicker: { color: colors.brandPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 1.6 },
   form: { gap: spacing.md },
   error: { color: "#B03030", fontWeight: "600", marginTop: 4 },

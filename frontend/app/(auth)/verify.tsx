@@ -138,7 +138,7 @@ export default function VerifyScreen() {
           />
 
           <View style={{ alignItems: "center", marginTop: spacing.lg }}>
-            <Muted>Didn't get the code?</Muted>
+            <Muted>Didn&apos;t get the code?</Muted>
             <Pressable onPress={onResend} disabled={cooldown > 0} style={{ marginTop: 6 }}>
               <Text style={[styles.linkStrong, cooldown > 0 && { color: colors.muted }]} testID="verify-resend">
                 {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
