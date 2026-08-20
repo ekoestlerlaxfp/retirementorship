@@ -7,40 +7,46 @@ Tagline: **"Retire Successfully. Stay Successfully Retired."**
 Sub-tagline: **"Your mentor to and through retirement."**
 
 ## Content pipeline — WordPress is the source of truth
-- All content flows from `https://retirementorship.com/wp-json/wp/v2/*`.
-- Backend proxies with 3-min in-memory cache, 429 stale-fallback.
+- Articles/categories/videos from `https://retirementorship.com/wp-json/wp/v2/*`.
+- Backend proxy with 3-min cache, 429 stale-fallback.
 - Frontend stale-while-revalidate: instant paint from cache, refresh on mount + on foreground.
 
+## Books — in-app PDF reader (this iteration)
+- Every book carries a `pdf_url`. Two seeded books today (with sample PDFs):
+  - **3D Retirement Income** — 14-page sample from Mozilla
+  - **Tax Saving Strategies** — W3C dummy PDF
+- **Reader**: `/book/read/[id]` — WebView + PDF.js on native (works in Expo Go); iframe fallback on web preview.
+- **Page tracking**: IntersectionObserver watches which canvas is >40% visible → posts `{type:'page', page, total}` back to RN → throttled (1.5s) save to `bookProgress` store.
+- **Offline reading**: uses the existing `downloads` module. Tap the cloud-download icon in the reader top bar → PDF is saved to device via `expo-file-system`; next open uses `file://` URL automatically.
+- **Progress store** (`src/offline/book-progress.ts`):
+  - Local-first (`AsyncStorage rm.book_progress.v1`), page + total_pages + updated_at_ms + dirty flag.
+  - Fire-and-forget POST to `/api/user/book-progress` after every save.
+  - `pushDirty()` runs on login + on Home mount; `syncFromServer()` runs on Learn mount and book detail focus.
+  - Last-write-wins by `updated_at_ms` on both sides.
+- **Progress bar** rendered inside every `BookCover` (Home rail, Learn bookshelf, book detail). Book detail also shows "Continue on page N" label + reading-progress chip + offline-size chip.
+- **Server endpoints** (bearer auth): `GET /api/user/book-progress`, `GET /api/user/book-progress/{book_id}`, `POST /api/user/book-progress { book_id, page, total_pages, updated_at }`.
+
 ## Home rails (deduplicated + history-aware)
-Backend `/api/wp/home-feed` guarantees **mutual-disjoint** rails and accepts:
-- `exclude_ids=<csv of post_ids>` — frontend passes local viewing history to skip already-seen content
-- `interest_cat=<category id>` — biases `recommended` to a category
-- Returns: `hero, tip, videos[], trending[], recommended[], featured[], latest[], stage`
-Frontend Home renders: Hero (newest) · Today's Tip (next article) · Books · Continue Reading · Watch & Learn (newest videos, hero excluded) · Trending · Magazines (when populated) · Advisor CTA · Recommended (page-2 archive or interest-based)
-**Removed**: "Latest articles" rail (was duplicating hero/tip).
+`/api/wp/home-feed` guarantees mutual-disjoint rails and accepts `exclude_ids`, `interest_cat`.
+Rendered: Hero · Today's Tip · Books · Continue Reading · Watch & Learn · Trending · Magazines · Advisor CTA · Recommended.
 
-## Custom content types
-- **Books** (`/api/books`, `/api/books/{id}`): 2 seeded titles fall back until WP `book` CPT is registered — `3D Retirement Income` (purple), `Tax Saving Strategies` (gold)
-- **Magazines** (`/api/magazines`): returns `[]` until WP `magazine` CPT is registered; Learn tab shows a graceful "coming soon" panel with mockup covers
-- **Videos** (`/api/videos?limit=N`): tries WP `video` CPT; falls back to posts with YouTube/Vimeo embeds
+## Learn tab
+Chip sections: **Bookshelf**, **Magazines**, **Videos**. Bookshelf renders each book with its current progress bar and page count.
 
-## Learn tab — content-first navigation
-Replaced the topic grid. New sections: **Bookshelf** (2-col book grid), **Magazines** (grid or coming-soon), **Videos** (2-col grid with play badge). Section switch is a pill-chip row with live counts.
-
-## Tools tab
-Three live calculators only: Compound Interest, Social Security Taxability, Mortgage. (RMD Estimator and Roth Conversion Planner removed per user.)
+## Tools
+Compound Interest, Social Security Taxability, Mortgage.
 
 ## Lead generation
-- Every Google sign-in stores email + name + picture + retirement stage.
-- Admin export: `GET /api/admin/leads` (JSON), `/api/admin/leads.csv` (CSV) gated by `X-Admin-Key`.
-- Optional webhook: `LEADS_WEBHOOK_URL`.
-- Advisor CTA renamed to **"Book a discovery meeting"** → `https://calendly.com/flinde/discovery` (configurable via `CALENDLY_URL` in `/app/frontend/src/theme.ts`).
+- Google sign-in stores email + name + picture + retirement stage.
+- Admin export: `/api/admin/leads` / `/api/admin/leads.csv` gated by `X-Admin-Key`.
+- Optional webhook: `LEADS_WEBHOOK_URL` fires on new signup.
+- CTA: **"Book a discovery meeting"** → `https://calendly.com/flinde/discovery`.
 
-## Design system (Apple 2026 look)
-Warm cream + gold + deep purple. Radius sm 12 · md 20 · lg 28 · xl 36. Floating pill tab bar with gold-tinted glass. Body 17pt, headline 30pt, letter-spacing -0.6.
+## Design system
+Warm cream + gold + deep purple. Radius sm 12 · md 20 · lg 28 · xl 36. Floating pill tab bar. Body 17pt, headline 30pt, letter-spacing -0.6. Reader UI uses charcoal `#231F20` chrome for dedicated reading.
 
 ## Offline layer
-`src/offline/cache.ts` (JSON KV + staleWhileRevalidate), `progress.ts` (per-post scroll progress → Continue Reading rail), `downloads.ts` (expo-file-system registry).
+`src/offline/cache.ts` (staleWhileRevalidate), `progress.ts` (article scroll progress → Continue Reading), `downloads.ts` (expo-file-system registry — used for PDFs), `book-progress.ts` (page-based reading progress + server sync).
 
 ## Env
 - Backend: `MONGO_URL`, `DB_NAME`, `ADMIN_API_KEY`, `LEADS_WEBHOOK_URL`
@@ -48,9 +54,9 @@ Warm cream + gold + deep purple. Radius sm 12 · md 20 · lg 28 · xl 36. Floati
 - Calendly URL configurable in `/app/frontend/src/theme.ts`
 
 ## Phase 2 backlog
-- Native interactive calculators (Compound Interest / SS taxability / Mortgage in-app)
-- Full book reader once WP `book` CPT is populated
-- Magazine flipbook once WP `magazine` CPT is populated
+- Register `book`, `magazine`, `video` CPTs in WordPress so real content flows in
+- Native interactive calculators (in-app Compound Interest / SS taxability / Mortgage)
+- Magazine flipbook viewer
 - Push notifications (Emergent-managed)
 - AI retirement coach (Claude via Emergent key)
 - Flowchart pinch-zoom viewer

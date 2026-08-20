@@ -506,6 +506,7 @@ BOOK_FALLBACK: List[dict] = [
         "image": None,
         "excerpt": "Learn the three dimensions of a resilient retirement paycheck: guaranteed income, growth income, and flexible income. Practical, plain-English strategies to keep you in control.",
         "content_html": "",
+        "pdf_url": "https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf",
         "type": "book",
     },
     {
@@ -521,6 +522,7 @@ BOOK_FALLBACK: List[dict] = [
         "image": None,
         "excerpt": "From Roth conversions to Social Security taxability, from RMDs to charitable stacking — the tax-smart playbook every retiree needs.",
         "content_html": "",
+        "pdf_url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
         "type": "book",
     },
 ]
@@ -602,6 +604,56 @@ async def list_videos(limit: int = 20):
         data = []
     all_posts = [transform_post(p) for p in data]
     return [p for p in all_posts if p["type"] == "video"][:limit]
+
+
+class BookProgressIn(BaseModel):
+    book_id: str
+    page: int
+    total_pages: int = 0
+    updated_at: Optional[float] = None  # client ms
+
+
+@api_router.get("/user/book-progress")
+async def user_book_progress_list(authorization: Optional[str] = Header(None)):
+    user = await require_user(authorization)
+    docs = await db.book_progress.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(200)
+    return docs
+
+
+@api_router.get("/user/book-progress/{book_id}")
+async def user_book_progress_get(book_id: str, authorization: Optional[str] = Header(None)):
+    user = await require_user(authorization)
+    doc = await db.book_progress.find_one({"user_id": user["user_id"], "book_id": book_id}, {"_id": 0})
+    return doc or {"book_id": book_id, "page": 0, "total_pages": 0}
+
+
+@api_router.post("/user/book-progress")
+async def user_book_progress_set(payload: BookProgressIn, authorization: Optional[str] = Header(None)):
+    user = await require_user(authorization)
+    existing = await db.book_progress.find_one(
+        {"user_id": user["user_id"], "book_id": payload.book_id}, {"_id": 0}
+    )
+    # Last-write-wins by updated_at ms
+    incoming_ts = payload.updated_at or (utcnow().timestamp() * 1000)
+    existing_ts = existing.get("updated_at_ms") if existing else 0
+    if existing and existing_ts and incoming_ts < existing_ts:
+        return existing
+    doc = {
+        "user_id": user["user_id"],
+        "book_id": payload.book_id,
+        "page": max(1, payload.page),
+        "total_pages": max(payload.total_pages, (existing or {}).get("total_pages", 0)),
+        "updated_at": utcnow(),
+        "updated_at_ms": incoming_ts,
+    }
+    await db.book_progress.update_one(
+        {"user_id": user["user_id"], "book_id": payload.book_id},
+        {"$set": doc},
+        upsert=True,
+    )
+    doc.pop("updated_at", None)  # drop datetime for JSON return
+    doc["updated_at_ms"] = incoming_ts
+    return doc
 
 
 @api_router.get("/")
@@ -693,6 +745,7 @@ async def on_startup():
         await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
         await db.bookmarks.create_index([("user_id", 1), ("post_id", 1)], unique=True)
         await db.history.create_index([("user_id", 1), ("post_id", 1)], unique=True)
+        await db.book_progress.create_index([("user_id", 1), ("book_id", 1)], unique=True)
         logger.info("Indexes ensured")
     except Exception as e:
         logger.warning(f"Index setup: {e}")

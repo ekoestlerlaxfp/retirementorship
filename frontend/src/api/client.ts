@@ -47,6 +47,7 @@ export type BookT = {
   chapters?: number;
   reading_time?: number;
   type: "book";
+  pdf_url?: string;
   modified?: string;
 };
 

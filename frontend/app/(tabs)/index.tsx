@@ -11,7 +11,7 @@ import { HeroCard, ArticleCard, TrendingCard, TipCard, Rail } from "@/src/compon
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { CenteredLoader, Muted, EmptyState } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
-import { progress as progressStore, type ProgressEntry } from "@/src/offline";
+import { progress as progressStore, type ProgressEntry, bookProgress, type BookProgress } from "@/src/offline";
 import { Image as ExpoImage } from "expo-image";
 import { BookCover, MagazineCover } from "@/src/components/BookCover";
 
@@ -58,6 +58,7 @@ export default function Home() {
   const [stage, setStage] = useState<string | null>(null);
   const [continueReading, setContinueReading] = useState<ProgressEntry[]>([]);
   const [books, setBooks] = useState<BookT[]>([]);
+  const [bookProg, setBookProg] = useState<Record<string, BookProgress>>({});
   const [magazines, setMagazines] = useState<MagazineT[]>([]);
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -96,6 +97,13 @@ export default function Home() {
       onCache: (d) => { if (d) setMagazines(d); },
       onFresh: (d) => setMagazines(d),
     }).catch(() => {});
+    // Book progress + server sync
+    bookProgress.pushDirty().catch(() => {});
+    bookProgress.syncFromServer().catch(() => {});
+    const bp = await bookProgress.list();
+    const bpMap: Record<string, BookProgress> = {};
+    bp.forEach((p) => { bpMap[p.book_id] = p; });
+    setBookProg(bpMap);
     // Continue Reading rail (local progress)
     setContinueReading(await progressStore.recent(6));
   }, []);
@@ -178,7 +186,11 @@ export default function Home() {
             title="Books from RetireMentorship"
             subtitle="Long-form guides for real-world decisions"
             data={books}
-            renderItem={(b) => <BookCover book={b} />}
+            renderItem={(b) => {
+              const p = bookProg[String(b.id)];
+              const pct = p && p.total_pages > 0 ? p.page / p.total_pages : 0;
+              return <BookCover book={b} progress={pct} />;
+            }}
           />
         )}
 

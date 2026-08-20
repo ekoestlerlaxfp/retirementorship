@@ -1,34 +1,55 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Share } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing, type as typo, CALENDLY_URL } from "@/src/theme";
 import { cachedApi, type BookT } from "@/src/api/client";
 import { BookCover } from "@/src/components/BookCover";
 import { CenteredLoader, GoldPill, Muted, PrimaryButton, SecondaryButton } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
+import { bookProgress, type BookProgress, downloads, formatBytes } from "@/src/offline";
 import { Linking } from "react-native";
 
 export default function BookScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [book, setBook] = useState<BookT | null>(null);
+  const [progress, setProgress] = useState<BookProgress | null>(null);
+  const [downloaded, setDownloaded] = useState<{ ready: boolean; bytes: number } | null>(null);
+
+  const refresh = useCallback(async (bookId: string) => {
+    const p = await bookProgress.get(bookId);
+    setProgress(p);
+    const dl = await downloads.get(bookId);
+    setDownloaded(dl ? { ready: dl.status === "ready", bytes: dl.bytes || 0 } : null);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
     cachedApi.book(id, {
-      onCache: (d) => { if (d) setBook(d); },
-      onFresh: (d) => setBook(d),
-    }).then((d) => { if (d && !book) setBook(d); }).catch(() => {});
+      onCache: (d) => { if (d) { setBook(d); refresh(String(d.id)); } },
+      onFresh: (d) => { setBook(d); refresh(String(d.id)); },
+    }).catch(() => {});
+    // Pull latest progress from server on view
+    bookProgress.syncFromServer().then(() => { if (id) refresh(id); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Refresh progress whenever this screen regains focus (returning from the reader)
+  useFocusEffect(
+    useCallback(() => {
+      if (id) refresh(id);
+    }, [id, refresh])
+  );
 
   if (!book) return <View style={styles.root}><CenteredLoader /></View>;
 
   const grad = (book.cover_gradient && book.cover_gradient.length >= 2 ? book.cover_gradient : ["#4B3166", "#7A5B99"]) as any;
-  const hasContent = !!(book.content_html && book.content_html.trim());
+  const canRead = !!book.pdf_url;
+  const pct = progress && progress.total_pages > 0 ? progress.page / progress.total_pages : 0;
 
+  const onRead = () => router.push({ pathname: "/book/read/[id]", params: { id: String(book.id) } });
   const onShare = async () => {
     try { await Share.share({ message: `${book.title} — RetireMentorship`, title: book.title }); } catch {}
   };
@@ -48,7 +69,7 @@ export default function BookScreen() {
             </Pressable>
           </SafeAreaView>
           <View style={styles.coverWrap}>
-            <BookCover book={book} width={200} height={286} onPress={() => {}} />
+            <BookCover book={book} width={200} height={286} onPress={onRead} progress={pct} />
           </View>
         </LinearGradient>
 
@@ -71,13 +92,32 @@ export default function BookScreen() {
                 <Text style={styles.metaChipText}>{book.reading_time} min</Text>
               </View>
             ) : null}
+            {progress && progress.total_pages > 0 ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="bookmark" size={14} color={colors.brandSecondary} />
+                <Text style={styles.metaChipText}>
+                  {Math.round(pct * 100)}% • pg {progress.page}/{progress.total_pages}
+                </Text>
+              </View>
+            ) : null}
+            {downloaded?.ready ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="cloud-done" size={14} color={colors.success} />
+                <Text style={styles.metaChipText}>Offline · {formatBytes(downloaded.bytes)}</Text>
+              </View>
+            ) : null}
           </View>
 
           {book.excerpt ? <Text style={styles.excerpt}>{book.excerpt}</Text> : null}
 
           <View style={{ marginTop: spacing["2xl"], gap: spacing.md }}>
-            {hasContent ? (
-              <PrimaryButton testID="book-start" label="Start reading" onPress={() => {}} icon="book" />
+            {canRead ? (
+              <PrimaryButton
+                testID="book-start"
+                label={progress?.page && progress.page > 1 ? `Continue on page ${progress.page}` : "Start reading"}
+                onPress={onRead}
+                icon="book"
+              />
             ) : (
               <View style={styles.comingSoonCard}>
                 <Ionicons name="hourglass-outline" size={20} color={colors.brandSecondary} />

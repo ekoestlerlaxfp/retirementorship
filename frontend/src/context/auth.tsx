@@ -90,6 +90,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!url) url = capturedUrl.current;
     if (!url) url = await Linking.getInitialURL();
     await processCallback(url);
+    // Kick off book-progress sync after login
+    try {
+      const mod = await import("../offline/book-progress");
+      await mod.bookProgress.pushDirty();
+      await mod.bookProgress.syncFromServer();
+    } catch {}
   }, [processCallback]);
 
   const signOut = useCallback(async () => {

@@ -9,6 +9,7 @@ import { colors, radius, shadow, spacing } from "@/src/theme";
 import { cachedApi, type BookT, type MagazineT, type WPPost } from "@/src/api/client";
 import { BookCover, MagazineCover } from "@/src/components/BookCover";
 import { H1, Muted, GoldPill } from "@/src/components/ui";
+import { bookProgress, type BookProgress } from "@/src/offline";
 
 type Section = "books" | "magazines" | "videos";
 
@@ -18,6 +19,14 @@ export default function Learn() {
   const [mags, setMags] = useState<MagazineT[] | null>(null);
   const [videos, setVideos] = useState<WPPost[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [bookProg, setBookProg] = useState<Record<string, BookProgress>>({});
+
+  const loadProgress = useCallback(async () => {
+    const list = await bookProgress.list();
+    const map: Record<string, BookProgress> = {};
+    list.forEach((p) => { map[p.book_id] = p; });
+    setBookProg(map);
+  }, []);
 
   const load = useCallback(async () => {
     cachedApi.books({
@@ -32,6 +41,10 @@ export default function Learn() {
       onCache: (d) => { if (d) setVideos(d); },
       onFresh: (d) => setVideos(d),
     }).then((d) => { if (d && videos === null) setVideos(d); }).catch(() => setVideos([]));
+    // Book progress + server sync
+    loadProgress();
+    bookProgress.syncFromServer().then(() => loadProgress()).catch(() => {});
+    bookProgress.pushDirty().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -85,7 +98,7 @@ export default function Learn() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brandPrimary} />}
       >
-        {tab === "books" && <BooksSection books={books} />}
+        {tab === "books" && <BooksSection books={books} progressMap={bookProg} />}
         {tab === "magazines" && <MagazinesSection mags={mags} />}
         {tab === "videos" && <VideosSection videos={videos} />}
       </ScrollView>
@@ -93,20 +106,30 @@ export default function Learn() {
   );
 }
 
-function BooksSection({ books }: { books: BookT[] | null }) {
+function BooksSection({ books, progressMap }: { books: BookT[] | null; progressMap: Record<string, BookProgress> }) {
   if (!books) return null;
   if (!books.length) {
     return <ComingSoon icon="book-outline" title="No books yet" subtitle="The bookshelf will fill up as we publish." />;
   }
   return (
     <View style={styles.grid}>
-      {books.map((b) => (
-        <View key={String(b.id)} style={styles.gridCell}>
-          <BookCover book={b} width={166} height={244} />
-          <Text style={styles.cellTitle} numberOfLines={2}>{b.title}</Text>
-          {b.subtitle ? <Text style={styles.cellSub} numberOfLines={2}>{b.subtitle}</Text> : null}
-        </View>
-      ))}
+      {books.map((b) => {
+        const p = progressMap[String(b.id)];
+        const pct = p && p.total_pages > 0 ? p.page / p.total_pages : 0;
+        return (
+          <View key={String(b.id)} style={styles.gridCell}>
+            <BookCover book={b} width={166} height={244} progress={pct} />
+            <Text style={styles.cellTitle} numberOfLines={2}>{b.title}</Text>
+            {p && p.total_pages > 0 ? (
+              <Text style={styles.progressMeta}>
+                {Math.round(pct * 100)}% • pg {p.page}/{p.total_pages}
+              </Text>
+            ) : (
+              b.subtitle ? <Text style={styles.cellSub} numberOfLines={2}>{b.subtitle}</Text> : null
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -288,6 +311,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   cellSub: { marginTop: 4, fontSize: 13, color: colors.muted, lineHeight: 18 },
+  progressMeta: { marginTop: 4, fontSize: 12, color: colors.brandSecondary, fontWeight: "700", letterSpacing: 0.2 },
   videoMeta: { marginTop: 4, fontSize: 13, color: colors.muted, fontWeight: "500" },
   comingWrap: {
     alignItems: "center",

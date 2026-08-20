@@ -15,16 +15,19 @@ export function BookCover({
   height = 240,
   onPress,
   style,
+  progress,
 }: {
   book: BookT;
   width?: number;
   height?: number;
   onPress?: () => void;
   style?: ViewStyle;
+  progress?: number; // 0..1
 }) {
   const grad = (book.cover_gradient && book.cover_gradient.length >= 2 ? book.cover_gradient : DEFAULT_GRADIENT) as any;
   const accent = book.accent || colors.brandPrimary;
   const go = () => (onPress ? onPress() : router.push({ pathname: "/book/[id]", params: { id: String(book.id) } }));
+  const pct = Math.max(0, Math.min(1, progress || 0));
   return (
     <Pressable
       testID={`book-cover-${book.id}`}
@@ -40,18 +43,20 @@ export function BookCover({
         ) : (
           <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
         )}
-        {/* Spine accent */}
-        <View style={[styles.spine, { backgroundColor: accent }]} />
-        {/* Foil monogram */}
-        <View style={styles.foil}>
+        <View style={[styles.spine, { backgroundColor: accent }]} pointerEvents="none" />
+        <View style={styles.foil} pointerEvents="none">
           <Text style={[styles.foilRM, { color: accent }]}>RM</Text>
         </View>
-        {/* Title & author */}
-        <View style={styles.textWrap}>
+        <View style={styles.textWrap} pointerEvents="none">
           <View style={[styles.rule, { backgroundColor: accent }]} />
           <Text style={styles.title} numberOfLines={4}>{book.title}</Text>
           {book.author ? <Text style={styles.author} numberOfLines={1}>{book.author}</Text> : null}
         </View>
+        {pct > 0 ? (
+          <View testID={`book-progress-${book.id}`} style={styles.progressTrack} pointerEvents="none">
+            <View style={[styles.progressFill, { width: `${Math.max(6, Math.round(pct * 100))}%`, backgroundColor: accent }]} />
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -78,11 +83,11 @@ export function MagazineCover({
         ) : (
           <LinearGradient colors={[colors.brandPrimary, "#B0793A"]} style={StyleSheet.absoluteFillObject} />
         )}
-        <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.7)"]} style={StyleSheet.absoluteFillObject} />
-        <View style={styles.textWrap}>
+        <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.7)"]} style={StyleSheet.absoluteFillObject} pointerEvents="none" />
+        <View style={styles.textWrap} pointerEvents="none">
           <Text style={styles.title} numberOfLines={3}>{mag.title}</Text>
         </View>
-        <View style={styles.magStamp}>
+        <View style={styles.magStamp} pointerEvents="none">
           <Ionicons name="newspaper" size={12} color="#FFF" />
           <Text style={styles.magStampText}>ISSUE</Text>
         </View>
@@ -109,6 +114,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 4,
     opacity: 0.9,
+    pointerEvents: "none" as any,
   },
   foil: {
     position: "absolute",
@@ -120,6 +126,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
     backgroundColor: "rgba(255,255,255,0.06)",
+    pointerEvents: "none" as any,
   },
   foilRM: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5 },
   textWrap: {
@@ -127,10 +134,19 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     bottom: spacing.md,
+    pointerEvents: "none" as any,
   },
   rule: { height: 2, width: 24, marginBottom: 6, opacity: 0.9 },
   title: { color: "#FFF", fontSize: 15, lineHeight: 19, fontWeight: "800", letterSpacing: -0.2 },
   author: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "600", letterSpacing: 0.8, marginTop: 4, textTransform: "uppercase" },
+  progressTrack: {
+    position: "absolute",
+    left: 0, right: 0, bottom: 0,
+    height: 4,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    pointerEvents: "none" as any,
+  },
+  progressFill: { height: "100%" },
   magStamp: {
     position: "absolute",
     top: spacing.md,
