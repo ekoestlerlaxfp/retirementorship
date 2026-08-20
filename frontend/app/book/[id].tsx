@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Share } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -58,7 +59,17 @@ export default function BookScreen() {
   return (
     <View style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }}>
-        <LinearGradient colors={grad} style={styles.headerBg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <View style={styles.headerBg}>
+          {book.hero_image ? (
+            <Image source={{ uri: book.hero_image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={300} />
+          ) : (
+            <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+          )}
+          <LinearGradient
+            colors={book.hero_image ? ["rgba(0,0,0,0.35)", "rgba(0,0,0,0.05)", "rgba(35,31,32,0.55)"] : ["rgba(0,0,0,0)", "rgba(0,0,0,0)"]}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFillObject}
+          />
           <SafeAreaView edges={["top"]} style={styles.topBar}>
             <Pressable testID="book-back" onPress={() => router.back()} style={styles.iconBtn} hitSlop={12}>
               <Ionicons name="chevron-back" size={22} color="#FFF" />
@@ -71,7 +82,7 @@ export default function BookScreen() {
           <View style={styles.coverWrap}>
             <BookCover book={book} width={200} height={286} onPress={onRead} progress={pct} />
           </View>
-        </LinearGradient>
+        </View>
 
         <View style={styles.body}>
           <GoldPill label="Book" testID="book-badge" />
@@ -141,7 +152,7 @@ export default function BookScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
-  headerBg: { paddingBottom: spacing["3xl"] },
+  headerBg: { paddingBottom: spacing["3xl"], position: "relative", overflow: "hidden" },
   topBar: { flexDirection: "row", paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
   iconBtn: {
     width: 44, height: 44, borderRadius: 22,

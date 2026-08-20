@@ -42,6 +42,7 @@ export type BookT = {
   excerpt?: string;
   content_html?: string;
   image?: string | null;
+  hero_image?: string | null;
   cover_gradient?: string[];
   accent?: string;
   chapters?: number;

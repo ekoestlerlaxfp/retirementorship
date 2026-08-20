@@ -36,22 +36,23 @@ export function BookCover({
     >
       <View style={[styles.cover, { width, height, borderRadius: radius.md }]}>
         {book.image ? (
-          <>
-            <Image source={{ uri: book.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
-            <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]} style={StyleSheet.absoluteFillObject} />
-          </>
+          <Image source={{ uri: book.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
         ) : (
           <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
         )}
-        <View style={[styles.spine, { backgroundColor: accent }]} pointerEvents="none" />
-        <View style={styles.foil} pointerEvents="none">
-          <Text style={[styles.foilRM, { color: accent }]}>RM</Text>
-        </View>
-        <View style={styles.textWrap} pointerEvents="none">
-          <View style={[styles.rule, { backgroundColor: accent }]} />
-          <Text style={styles.title} numberOfLines={4}>{book.title}</Text>
-          {book.author ? <Text style={styles.author} numberOfLines={1}>{book.author}</Text> : null}
-        </View>
+        {!book.image && (
+          <>
+            <View style={[styles.spine, { backgroundColor: accent }]} pointerEvents="none" />
+            <View style={styles.foil} pointerEvents="none">
+              <Text style={[styles.foilRM, { color: accent }]}>RM</Text>
+            </View>
+            <View style={styles.textWrap} pointerEvents="none">
+              <View style={[styles.rule, { backgroundColor: accent }]} />
+              <Text style={styles.title} numberOfLines={4}>{book.title}</Text>
+              {book.author ? <Text style={styles.author} numberOfLines={1}>{book.author}</Text> : null}
+            </View>
+          </>
+        )}
         {pct > 0 ? (
           <View testID={`book-progress-${book.id}`} style={styles.progressTrack} pointerEvents="none">
             <View style={[styles.progressFill, { width: `${Math.max(6, Math.round(pct * 100))}%`, backgroundColor: accent }]} />
