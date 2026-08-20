@@ -69,7 +69,7 @@ export default function ArticleScreen() {
 
   const toggleBookmark = useCallback(async () => {
     if (!post) return;
-    if (!user) { router.push("/(tabs)/profile"); return; }
+    if (!user) { router.push("/(auth)/login"); return; }
     try {
       if (bookmarked) { await api.removeBookmark(String(post.id)); setBookmarked(false); }
       else {

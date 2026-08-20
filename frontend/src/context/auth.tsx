@@ -1,16 +1,25 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
-import { Platform } from "react-native";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, tokenStore, User } from "../api/client";
 
-WebBrowser.maybeCompleteAuthSession();
+type RegisterPayload = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  password: string;
+  retirement_stage?: string | null;
+};
 
 type AuthContextT = {
   user: User | null;
   loading: boolean;
-  signIn: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<{ verification_required: boolean }>;
+  verify: (email: string, code: string) => Promise<void>;
+  resendCode: (email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (email: string, code: string, password: string) => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User | null) => void;
 };
@@ -20,15 +29,10 @@ const AuthContext = createContext<AuthContextT | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const processedSessions = useRef<Set<string>>(new Set());
-  const capturedUrl = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     const token = await tokenStore.get();
-    if (!token) {
-      setUser(null);
-      return;
-    }
+    if (!token) { setUser(null); return; }
     try {
       const { user } = await api.me();
       setUser(user);
@@ -38,77 +42,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const processCallback = useCallback(async (url: string | null) => {
-    if (!url) return false;
-    const m = url.match(/[?#&]session_id=([^&#]+)/);
-    if (!m) return false;
-    const session_id = decodeURIComponent(m[1]);
-    if (processedSessions.current.has(session_id)) return true;
-    processedSessions.current.add(session_id);
-    try {
-      const { session_token, user } = await api.authSession(session_id);
-      await tokenStore.set(session_token);
-      setUser(user);
-      return true;
-    } catch (e) {
-      console.warn("Auth exchange failed", e);
-      return false;
-    }
-  }, []);
-
-  // Cold start + hot deep link handling
   useEffect(() => {
     let mounted = true;
-    const sub = Linking.addEventListener("url", (evt) => {
-      capturedUrl.current = evt.url;
-      processCallback(evt.url);
-    });
     (async () => {
-      const initial = await Linking.getInitialURL();
-      const handled = await processCallback(initial);
-      if (!handled) await refresh();
+      await refresh();
       if (mounted) setLoading(false);
     })();
-    return () => {
-      mounted = false;
-      sub.remove();
-    };
-  }, [processCallback, refresh]);
+    return () => { mounted = false; };
+  }, [refresh]);
 
-  const signIn = useCallback(async () => {
-    const redirectUrl = Platform.OS === "web" ? window.location.origin + "/" : Linking.createURL("");
-    const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-    if (Platform.OS === "web") {
-      window.location.href = authUrl;
-      return;
-    }
-    capturedUrl.current = null;
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-    // Try all three sources
-    let url: string | null = null;
-    if (result.type === "success" && (result as any).url) url = (result as any).url;
-    if (!url) url = capturedUrl.current;
-    if (!url) url = await Linking.getInitialURL();
-    await processCallback(url);
-    // Kick off book-progress sync after login
+  const applySession = useCallback(async (token: string, u: User) => {
+    await tokenStore.set(token);
+    setUser(u);
     try {
       const mod = await import("../offline/book-progress");
       await mod.bookProgress.pushDirty();
       await mod.bookProgress.syncFromServer();
     } catch {}
-  }, [processCallback]);
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const res = await api.login(email.trim(), password);
+    await applySession(res.session_token, res.user);
+  }, [applySession]);
+
+  const register = useCallback(async (payload: RegisterPayload) => {
+    const res = await api.register({
+      ...payload,
+      email: payload.email.trim(),
+      first_name: payload.first_name.trim(),
+      last_name: payload.last_name.trim(),
+      phone: payload.phone.trim(),
+    });
+    return { verification_required: !!res.verification_required };
+  }, []);
+
+  const verify = useCallback(async (email: string, code: string) => {
+    const res = await api.verify(email.trim(), code.trim());
+    await applySession(res.session_token, res.user);
+  }, [applySession]);
+
+  const resendCode = useCallback(async (email: string) => {
+    await api.resendCode(email.trim());
+  }, []);
+
+  const forgotPassword = useCallback(async (email: string) => {
+    await api.forgotPassword(email.trim());
+  }, []);
+
+  const resetPassword = useCallback(async (email: string, code: string, password: string) => {
+    const res = await api.resetPassword(email.trim(), code.trim(), password);
+    await applySession(res.session_token, res.user);
+  }, [applySession]);
 
   const signOut = useCallback(async () => {
-    try {
-      await api.logout();
-    } catch {}
+    try { await api.logout(); } catch {}
     await tokenStore.clear();
     setUser(null);
   }, []);
 
-  const value = useMemo(
-    () => ({ user, loading, signIn, signOut, refresh, setUser }),
-    [user, loading, signIn, signOut, refresh]
+  const value = useMemo<AuthContextT>(
+    () => ({ user, loading, signIn, signOut, register, verify, resendCode, forgotPassword, resetPassword, refresh, setUser }),
+    [user, loading, signIn, signOut, register, verify, resendCode, forgotPassword, resetPassword, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 10 — Custom email/password auth end-to-end (backend + frontend smoke). Backend: 18/18 pytest tests PASSED in /app/backend/tests/test_iteration10_auth.py covering register (201/409/422), verify (400 wrong code, 200 success, 5-attempt lockout even blocks correct code), resend-code (200 ok on unknown email AND within cooldown), login (403 unverified, 401 wrong pw, 200 verified, 429 after 5 bad attempts), forgot+reset flow (issues new session, old session token 401s), /me, and logout (invalidates token → subsequent /me and /user/bookmarks both 401). The require_user helper was proven end-to-end with the new bearer token by POSTing /api/user/bookmarks and then GET-listing it. EMERGENT_EMAIL_KEY was temporarily blanked in backend/.env for the pytest run so no real Resend outbound calls were made (restored after tests). Frontend smoke: register screen loads, submits, and routes to /(auth)/verify with the email pre-filled; the 6 code boxes accept the sha256-decoded code from db.user_verification_codes and auto-submit; verify success routes to /(tabs) (URL becomes '/' — Expo Router hides the group segment); login screen loads, submits, and routes to /(tabs). NOTE: on web, expo-secure-store is a no-op (no localStorage persistence), so a full page reload after verify appears as Guest on /profile — this is a known Expo web limitation, NOT a backend bug. Native iOS/Android builds will persist correctly. All test users, sessions, codes, bookmarks cleaned from Mongo.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Session persistence on web preview after reload",
+        "issue": "expo-secure-store has no web implementation, so after a full-page reload on the web preview `tokenStore.get()` returns null and the app resets to the guest state. Native builds are unaffected. If the web preview is a supported target, consider a web fallback (e.g., localStorage) in src/api/client.ts's tokenStore. Reference: /app/frontend/src/api/client.ts:84-102.",
+        "affected_testIDs": ["profile-signout", "profile-signin"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10_auth.py",
+    "/app/test_reports/pytest/iteration10_results.xml",
+    "/app/backend/tests/_ui_mongo_helper.py"
+  ],
+  "action_items": [
+    "OPTIONAL: Add a web fallback to tokenStore in /app/frontend/src/api/client.ts so expo-secure-store falls back to localStorage on web — enables real persistence in the web preview (native uses SecureStore, web uses localStorage). Purely a DX improvement; native mobile builds are unaffected.",
+    "OPTIONAL: server.py verify handler still contains an unused `invalid` expression (server.py:480-483) — dead code from a refactor. Consider removing for clarity; behavior is unaffected (real logic is on lines 485-492).",
+    "OPTIONAL: server.py has grown past ~1290 lines. Consider splitting auth routes / WP proxy / user-data routes into modules (existing note from iter9)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:490 correctly combines `attempts >= 5` with `not compare_digest(...)` inside a single OR + $inc attempts — behavior matches the spec: after 5 failures the correct code is also rejected. Verified in test_verify_five_wrong_attempts_locks_code.",
+    "server.py:463 registration uses asyncio.create_task for both _send_verification and _fire_leads_webhook — non-blocking and email failures are swallowed inside _send_verification (line 406-407), so the endpoint always returns 201 quickly. Good.",
+    "server.py:519-522 resend-code cooldown checks the most recent code's created_at against RESEND_COOLDOWN_SEC=30s and silently no-ops if inside — enumeration-resistant and preserves the {ok:true} contract.",
+    "server.py:582-586 reset-password revokes ALL prior sessions via a single update_many before issuing a fresh one — verified by test_reset_flow_end_to_end (old token → 401 after reset).",
+    "server.py:271-288 get_user_from_token defensively handles tz-naive expires_at datetimes stored in Mongo — good, since Mongo returns naive UTC on some driver versions.",
+    "server.py:1263-1280 startup hook wipes legacy Google-source users (source=='google' OR missing password_hash), plus their sessions/bookmarks/history/codes — matches the review-request assertion that legacy Google users were wiped.",
+    "emailer.py:79-103 the G2/G3 email safety scanner (no forms, no credential asks, no shorteners, absolute https, host parity) is called before every send — solid guardrail.",
+    "MINOR: server.py:480-483 dead `invalid = (...)` expression is never used (superseded by the check on 485-492).",
+    "MINOR: server.py:1233 uses deprecated FastAPI `@app.on_event('startup')` (existing flag from iter9)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10_auth.py (created)",
+    "/app/backend/tests/_ui_mongo_helper.py (created — used by playwright smoke to brute-force sha256 codes)",
+    "/app/test_reports/pytest/iteration10_results.xml (generated)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 pytest tests)",
+    "frontend": "smoke passed — register → verify → session → login all functional; web preview reload persistence is an Expo/web SecureStore limitation, not a backend bug"
+  },
+  "seed_data_creation": "Each test creates a unique user via /api/auth/register with `qa+<uuid>@retirementorship.test`. Verification/reset codes are recovered by brute-forcing sha256(000000..999999) against `db.user_verification_codes.code_hash`. Every test class cleans up its own user + sessions + codes + bookmarks + history + login_attempts in the finally block. Final sweep at end of run confirmed 0 leftover *@retirementorship.test users in Mongo.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend tests with `pytest backend/tests/test_iteration10_auth.py -n 0 -v`. IMPORTANT: before running, blank EMERGENT_EMAIL_KEY in /app/backend/.env and `sudo supervisorctl restart backend`; restore afterwards. The suite is idempotent (unique emails per test, per-test cleanup). To reproduce the UI smoke: use `/app/backend/tests/_ui_mongo_helper.py fetch <email> verify` (or `reset`) to grab the 6-digit code from Mongo — the helper brute-forces sha256(0..999999) against code_hash and prints the 6-digit code. Frontend URL is http://localhost:3000; the app calls the preview backend via EXPO_PUBLIC_BACKEND_URL. On web the /(tabs) group is dropped from the URL — after successful verify or login the URL is '/', not '/(tabs)'. Note: expo-secure-store is a no-op on Expo web, so state does not survive full page reloads on the web preview — use client-side navigation (bottom tabs) to stay signed in.",
+  "rca_of_issue": "N/A — no regressions found. All acceptance criteria from the review request are met by the backend implementation. The only frontend observation (web-preview reload → guest state) is caused by expo-secure-store having no web implementation; it does not affect native iOS/Android builds and does not affect any of the backend contracts."
+}

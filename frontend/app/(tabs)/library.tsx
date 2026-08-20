@@ -6,13 +6,13 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api/client";
-import { H1, Muted, EmptyState, PrimaryButton } from "@/src/components/ui";
+import { H1, Muted, EmptyState, PrimaryButton, SecondaryButton } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
 
 type Tab = "bookmarks" | "history";
 
 export default function Library() {
-  const { user, signIn } = useAuth();
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("bookmarks");
   const [items, setItems] = useState<any[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,8 +63,9 @@ export default function Library() {
           <Muted style={{ textAlign: "center", marginBottom: spacing.xl, maxWidth: 300 }}>
             Sign in to bookmark articles, track reading progress, and pick up where you left off.
           </Muted>
-          <View style={{ width: "100%", maxWidth: 320 }}>
-            <PrimaryButton testID="library-signin" label="Sign in with Google" onPress={signIn} icon="logo-google" />
+          <View style={{ width: "100%", maxWidth: 320, gap: spacing.md }}>
+            <PrimaryButton testID="library-signin" label="Sign in" onPress={() => router.push("/(auth)/login")} icon="log-in" />
+            <SecondaryButton testID="library-signup" label="Create free account" onPress={() => router.push("/(auth)/register")} icon="person-add" />
           </View>
         </View>
       ) : items === null ? null : items.length === 0 ? (

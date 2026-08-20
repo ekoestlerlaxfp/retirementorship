@@ -12,7 +12,7 @@ import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { api } from "@/src/api/client";
 
 export default function Profile() {
-  const { user, signIn, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [stage, setStage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,6 +20,11 @@ export default function Profile() {
   }, [user]);
 
   const stageLabel = stages.find((s) => s.id === (user?.retirement_stage || stage))?.label;
+  const displayName = user
+    ? ((user.first_name || user.last_name)
+        ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+        : (user.name || user.email))
+    : "Guest";
 
   const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; testID: string }[] = [
     { icon: "bookmark-outline", label: "My bookmarks", onPress: () => router.push("/(tabs)/library"), testID: "profile-bookmarks" },
@@ -40,18 +45,19 @@ export default function Profile() {
         </SafeAreaView>
 
         <View style={styles.card}>
-          <Avatar url={user?.picture} name={user?.name || user?.email} size={64} />
+          <Avatar url={user?.picture ?? undefined} name={displayName} size={64} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{user?.name || user?.email || "Guest"}</Text>
+            <Text style={styles.name}>{displayName}</Text>
             {user?.email && <Muted>{user.email}</Muted>}
             {stageLabel && <Text style={styles.stageBadge}>{stageLabel}</Text>}
           </View>
         </View>
 
         {!user && (
-          <View style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.xl }}>
-            <PrimaryButton testID="profile-signin" label="Sign in with Google" onPress={signIn} icon="logo-google" />
-            <Muted style={{ textAlign: "center", marginTop: spacing.md }}>
+          <View style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.xl, gap: spacing.md }}>
+            <PrimaryButton testID="profile-signin" label="Sign in" onPress={() => router.push("/(auth)/login")} icon="log-in" />
+            <SecondaryButton testID="profile-signup" label="Create free account" onPress={() => router.push("/(auth)/register")} icon="person-add" />
+            <Muted style={{ textAlign: "center", marginTop: spacing.sm }}>
               Save bookmarks, track progress, and personalize your feed.
             </Muted>
           </View>

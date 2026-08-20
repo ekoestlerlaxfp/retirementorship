@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 const TOKEN_KEY = "rm_session_token";
@@ -71,14 +72,22 @@ export type MagazineT = {
 export type User = {
   user_id: string;
   email: string;
-  name?: string;
-  picture?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  verified?: boolean;
   retirement_stage?: string | null;
+  // Legacy shim so existing components using `name`/`picture` still work.
+  name?: string;
+  picture?: string | null;
 };
 
 export const tokenStore = {
   async get() {
     try {
+      if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+        return localStorage.getItem(TOKEN_KEY);
+      }
       return await SecureStore.getItemAsync(TOKEN_KEY);
     } catch {
       return null;
@@ -86,11 +95,19 @@ export const tokenStore = {
   },
   async set(t: string) {
     try {
+      if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+        localStorage.setItem(TOKEN_KEY, t);
+        return;
+      }
       await SecureStore.setItemAsync(TOKEN_KEY, t);
     } catch {}
   },
   async clear() {
     try {
+      if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+        localStorage.removeItem(TOKEN_KEY);
+        return;
+      }
       await SecureStore.deleteItemAsync(TOKEN_KEY);
     } catch {}
   },
@@ -114,11 +131,32 @@ async function req<T = any>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  // Auth
-  authSession: (session_id: string) =>
-    req<{ session_token: string; user: User }>("/auth/session", {
-      method: "POST",
-      body: JSON.stringify({ session_id }),
+  // Auth — custom email/password with email verification
+  register: (payload: {
+    first_name: string; last_name: string; email: string; phone: string; password: string;
+    retirement_stage?: string | null;
+  }) => req<{ user: User; verification_required: boolean }>("/auth/register", {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  verify: (email: string, code: string) =>
+    req<{ session_token: string; user: User }>("/auth/verify", {
+      method: "POST", body: JSON.stringify({ email, code }),
+    }),
+  resendCode: (email: string) =>
+    req<{ ok: boolean }>("/auth/resend-code", {
+      method: "POST", body: JSON.stringify({ email }),
+    }),
+  login: (email: string, password: string) =>
+    req<{ session_token: string; user: User }>("/auth/login", {
+      method: "POST", body: JSON.stringify({ email, password }),
+    }),
+  forgotPassword: (email: string) =>
+    req<{ ok: boolean }>("/auth/forgot-password", {
+      method: "POST", body: JSON.stringify({ email }),
+    }),
+  resetPassword: (email: string, code: string, password: string) =>
+    req<{ session_token: string; user: User }>("/auth/reset-password", {
+      method: "POST", body: JSON.stringify({ email, code, password }),
     }),
   me: () => req<{ user: User }>("/auth/me"),
   logout: () => req("/auth/logout", { method: "POST" }),

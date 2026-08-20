@@ -20,7 +20,6 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 WP_BASE = "https://retirementorship.com/wp-json/wp/v2"
-EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -136,15 +135,46 @@ def utcnow() -> datetime:
 
 
 # ---- Models ----
-class SessionExchangeIn(BaseModel):
-    session_id: str
+class RegisterIn(BaseModel):
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+    email: str = Field(min_length=3, max_length=200)
+    phone: str = Field(min_length=1, max_length=40)
+    password: str = Field(min_length=8, max_length=72)
+    retirement_stage: Optional[str] = None
+
+
+class VerifyIn(BaseModel):
+    email: str
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class ResendCodeIn(BaseModel):
+    email: str
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class ForgotIn(BaseModel):
+    email: str
+
+
+class ResetIn(BaseModel):
+    email: str
+    code: str = Field(pattern=r"^\d{6}$")
+    password: str = Field(min_length=8, max_length=72)
 
 
 class UserOut(BaseModel):
     user_id: str
     email: str
-    name: Optional[str] = None
-    picture: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    verified: bool = False
     retirement_stage: Optional[str] = None
 
 
@@ -170,18 +200,89 @@ class HistoryIn(BaseModel):
 
 
 # ---- Auth helpers ----
+import secrets
+import hashlib
+from passlib.context import CryptContext
+from emailer import send_verification_email, send_password_reset_email
+
+_pwd = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=12,
+    bcrypt__truncate_error=True,
+)
+
+SESSION_TTL_DAYS = 30
+CODE_TTL_MINUTES = 10
+LOGIN_LOCK_WINDOW_MIN = 15
+LOGIN_LOCK_THRESHOLD = 5
+RESEND_COOLDOWN_SEC = 30
+
+
+def _hash_pw(p: str) -> str:
+    return _pwd.hash(p)
+
+
+def _verify_pw(p: str, h: str) -> bool:
+    try:
+        return _pwd.verify(p, h)
+    except Exception:
+        return False
+
+
+def _digest(v: str) -> str:
+    return hashlib.sha256(v.encode()).hexdigest()
+
+
+def _new_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def _new_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _norm_email(e: str) -> str:
+    e = (e or "").strip().lower()
+    if not _EMAIL_RE.match(e):
+        raise HTTPException(status_code=422, detail="Please enter a valid email address.")
+    return e
+
+
+def _public_user(u: dict) -> dict:
+    return {
+        "user_id": u.get("user_id"),
+        "email": u.get("email"),
+        "first_name": u.get("first_name"),
+        "last_name": u.get("last_name"),
+        "phone": u.get("phone"),
+        "verified": bool(u.get("verified")),
+        "retirement_stage": u.get("retirement_stage"),
+        # Compatibility with older frontend fields
+        "name": (f"{u.get('first_name') or ''} {u.get('last_name') or ''}".strip()
+                 or u.get("email")),
+        "picture": None,
+    }
+
+
 async def get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
     token = authorization.split(" ", 1)[1].strip()
-    sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    sess = await db.user_sessions.find_one(
+        {"token_hash": _digest(token), "revoked_at": None},
+        {"_id": 0},
+    )
     if not sess:
         return None
-    expires_at = sess.get("expires_at")
-    if isinstance(expires_at, datetime):
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if expires_at < utcnow():
+    exp = sess.get("expires_at")
+    if isinstance(exp, datetime):
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < utcnow():
             return None
     user = await db.users.find_one({"user_id": sess["user_id"]}, {"_id": 0})
     return user
@@ -194,73 +295,86 @@ async def require_user(authorization: Optional[str]) -> dict:
     return user
 
 
-# ---- Auth routes ----
-@api_router.post("/auth/session")
-async def auth_session(payload: SessionExchangeIn):
-    async with httpx.AsyncClient(timeout=15.0) as hc:
-        try:
-            r = await hc.get(EMERGENT_AUTH_URL, headers={"X-Session-ID": payload.session_id})
-        except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Auth service error: {e}")
-        if r.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session")
-        data = r.json()
-
-    email = data.get("email")
-    name = data.get("name")
-    picture = data.get("picture")
-    session_token = data.get("session_token")
-    if not email or not session_token:
-        raise HTTPException(status_code=401, detail="Missing user data")
-
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    is_new_user = False
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": name, "picture": picture, "last_login": utcnow()}},
-        )
-    else:
-        is_new_user = True
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id,
-            "email": email,
-            "name": name,
-            "picture": picture,
-            "retirement_stage": None,
-            "source": "google",
-            "created_at": utcnow(),
-            "last_login": utcnow(),
-        })
-
+async def _issue_session(user_id: str) -> str:
+    raw = _new_token()
+    created = utcnow()
     await db.user_sessions.insert_one({
-        "session_token": session_token,
+        "token_hash": _digest(raw),
         "user_id": user_id,
-        "created_at": utcnow(),
-        "expires_at": utcnow() + timedelta(days=7),
+        "created_at": created,
+        "expires_at": created + timedelta(days=SESSION_TTL_DAYS),
+        "revoked_at": None,
     })
+    return raw
 
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
 
-    # Fire the leads webhook (fire-and-forget) for new signups
-    if is_new_user and LEADS_WEBHOOK_URL:
-        asyncio.create_task(_fire_leads_webhook(user))
+async def _login_locked(email_key: str) -> bool:
+    rec = await db.login_attempts.find_one({"key": email_key})
+    if not rec:
+        return False
+    locked_until = rec.get("locked_until")
+    if locked_until:
+        if isinstance(locked_until, datetime):
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if locked_until > utcnow():
+                return True
+    window = rec.get("window_started_at")
+    if isinstance(window, datetime):
+        if window.tzinfo is None:
+            window = window.replace(tzinfo=timezone.utc)
+        if utcnow() - window >= timedelta(minutes=LOGIN_LOCK_WINDOW_MIN):
+            await db.login_attempts.delete_one({"_id": rec["_id"]})
+    return False
 
-    return {"session_token": session_token, "user": user}
+
+async def _bad_login(email_key: str):
+    t = utcnow()
+    rec = await db.login_attempts.find_one({"key": email_key})
+    if not rec:
+        await db.login_attempts.insert_one({
+            "key": email_key, "failures": 1, "window_started_at": t, "locked_until": None,
+        })
+        return
+    window = rec.get("window_started_at")
+    if isinstance(window, datetime):
+        if window.tzinfo is None:
+            window = window.replace(tzinfo=timezone.utc)
+        if t - window >= timedelta(minutes=LOGIN_LOCK_WINDOW_MIN):
+            await db.login_attempts.update_one(
+                {"_id": rec["_id"]},
+                {"$set": {"failures": 1, "window_started_at": t, "locked_until": None}},
+            )
+            return
+    n = int(rec.get("failures", 0)) + 1
+    lock = t + timedelta(minutes=LOGIN_LOCK_WINDOW_MIN) if n >= LOGIN_LOCK_THRESHOLD else None
+    await db.login_attempts.update_one(
+        {"_id": rec["_id"]},
+        {"$set": {"failures": n, "locked_until": lock}},
+    )
+
+
+async def _clear_login_attempts(email_key: str):
+    await db.login_attempts.delete_one({"key": email_key})
 
 
 async def _fire_leads_webhook(user: dict):
+    """Fire-and-forget lead webhook so advisors get the new signup."""
+    if not LEADS_WEBHOOK_URL:
+        return
     try:
+        created = user.get("created_at")
         payload = {
             "email": user.get("email"),
-            "name": user.get("name"),
-            "picture": user.get("picture"),
+            "first_name": user.get("first_name"),
+            "last_name": user.get("last_name"),
+            "phone": user.get("phone"),
+            "name": (f"{user.get('first_name') or ''} {user.get('last_name') or ''}".strip()
+                     or user.get("email")),
             "user_id": user.get("user_id"),
             "retirement_stage": user.get("retirement_stage"),
-            "created_at": user.get("created_at").isoformat() if isinstance(user.get("created_at"), datetime) else user.get("created_at"),
-            "source": user.get("source", "google"),
+            "created_at": created.isoformat() if isinstance(created, datetime) else created,
+            "source": user.get("source", "email"),
         }
         async with httpx.AsyncClient(timeout=10.0) as hc:
             await hc.post(LEADS_WEBHOOK_URL, json=payload)
@@ -268,17 +382,222 @@ async def _fire_leads_webhook(user: dict):
         logger.warning(f"Leads webhook failed: {e}")
 
 
+async def _send_verification(user: dict) -> None:
+    """Generate a fresh 6-digit code, invalidate old ones, and email it."""
+    email = user["email"]
+    code = _new_code()
+    t = utcnow()
+    await db.user_verification_codes.update_many(
+        {"user_id": user["user_id"], "purpose": "verify", "consumed": False},
+        {"$set": {"consumed": True}},
+    )
+    await db.user_verification_codes.insert_one({
+        "user_id": user["user_id"],
+        "email": email,
+        "purpose": "verify",
+        "code_hash": _digest(code),
+        "created_at": t,
+        "expires_at": t + timedelta(minutes=CODE_TTL_MINUTES),
+        "attempts": 0,
+        "consumed": False,
+    })
+    try:
+        await send_verification_email(to=email, first_name=user.get("first_name") or "there", code=code)
+    except Exception as e:
+        logger.error(f"send_verification_email failed for {email}: {e}")
+
+
+async def _send_reset(user: dict) -> None:
+    email = user["email"]
+    code = _new_code()
+    t = utcnow()
+    await db.user_verification_codes.update_many(
+        {"user_id": user["user_id"], "purpose": "reset", "consumed": False},
+        {"$set": {"consumed": True}},
+    )
+    await db.user_verification_codes.insert_one({
+        "user_id": user["user_id"],
+        "email": email,
+        "purpose": "reset",
+        "code_hash": _digest(code),
+        "created_at": t,
+        "expires_at": t + timedelta(minutes=CODE_TTL_MINUTES),
+        "attempts": 0,
+        "consumed": False,
+    })
+    try:
+        await send_password_reset_email(to=email, first_name=user.get("first_name") or "there", code=code)
+    except Exception as e:
+        logger.error(f"send_password_reset_email failed for {email}: {e}")
+
+
+# ---- Auth routes ----
+@api_router.post("/auth/register", status_code=201)
+async def auth_register(payload: RegisterIn):
+    email = _norm_email(payload.email)
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    doc = {
+        "user_id": user_id,
+        "email": email,
+        "first_name": payload.first_name.strip(),
+        "last_name": payload.last_name.strip(),
+        "phone": payload.phone.strip(),
+        "password_hash": _hash_pw(payload.password),
+        "verified": False,
+        "retirement_stage": payload.retirement_stage,
+        "source": "email",
+        "created_at": utcnow(),
+        "last_login": None,
+    }
+    try:
+        await db.users.insert_one(doc)
+    except Exception:
+        # unique-index race
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    # Fire the verification email and the lead webhook (both non-blocking).
+    asyncio.create_task(_send_verification(doc))
+    asyncio.create_task(_fire_leads_webhook(doc))
+
+    return {"user": _public_user(doc), "verification_required": True}
+
+
+@api_router.post("/auth/verify")
+async def auth_verify(payload: VerifyIn):
+    email = _norm_email(payload.email)
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    rec = None
+    if user:
+        rec = await db.user_verification_codes.find_one(
+            {"user_id": user["user_id"], "purpose": "verify", "consumed": False},
+            sort=[("created_at", -1)],
+        )
+    now_ = utcnow()
+    if not user or not rec:
+        raise HTTPException(status_code=400, detail="Invalid or expired code.")
+    exp = rec["expires_at"]
+    if isinstance(exp, datetime) and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < now_ or rec.get("attempts", 0) >= 5 or not secrets.compare_digest(rec["code_hash"], _digest(payload.code)):
+        await db.user_verification_codes.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Invalid or expired code.")
+
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"verified": True, "last_login": now_}},
+    )
+    await db.user_verification_codes.update_one({"_id": rec["_id"]}, {"$set": {"consumed": True}})
+
+    token = await _issue_session(user["user_id"])
+    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    return {"session_token": token, "user": _public_user(fresh)}
+
+
+@api_router.post("/auth/resend-code")
+async def auth_resend_code(payload: ResendCodeIn):
+    email = _norm_email(payload.email)
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    # Enumeration-resistant: same response regardless.
+    if user and not user.get("verified"):
+        # Cooldown: skip if a code was created in the last N seconds.
+        last = await db.user_verification_codes.find_one(
+            {"user_id": user["user_id"], "purpose": "verify"},
+            sort=[("created_at", -1)],
+        )
+        if last:
+            created = last.get("created_at")
+            if isinstance(created, datetime):
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if (utcnow() - created).total_seconds() < RESEND_COOLDOWN_SEC:
+                    return {"ok": True}
+        asyncio.create_task(_send_verification(user))
+    return {"ok": True}
+
+
+@api_router.post("/auth/login")
+async def auth_login(payload: LoginIn):
+    email = _norm_email(payload.email)
+    key = f"email:{email}"
+    if await _login_locked(key):
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again in a few minutes.")
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    ok = bool(user) and _verify_pw(payload.password, user.get("password_hash") or "")
+    if not ok:
+        await _bad_login(key)
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if not user.get("verified"):
+        # Trigger a fresh code so they can complete verification.
+        asyncio.create_task(_send_verification(user))
+        raise HTTPException(status_code=403, detail="Please verify your email first — we've resent your code.")
+    await _clear_login_attempts(key)
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"last_login": utcnow()}})
+    token = await _issue_session(user["user_id"])
+    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    return {"session_token": token, "user": _public_user(fresh)}
+
+
+@api_router.post("/auth/forgot-password")
+async def auth_forgot(payload: ForgotIn):
+    email = _norm_email(payload.email)
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if user:
+        asyncio.create_task(_send_reset(user))
+    return {"ok": True}
+
+
+@api_router.post("/auth/reset-password")
+async def auth_reset(payload: ResetIn):
+    email = _norm_email(payload.email)
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    rec = None
+    if user:
+        rec = await db.user_verification_codes.find_one(
+            {"user_id": user["user_id"], "purpose": "reset", "consumed": False},
+            sort=[("created_at", -1)],
+        )
+    now_ = utcnow()
+    if not user or not rec:
+        raise HTTPException(status_code=400, detail="Invalid or expired code.")
+    exp = rec["expires_at"]
+    if isinstance(exp, datetime) and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < now_ or rec.get("attempts", 0) >= 5 or not secrets.compare_digest(rec["code_hash"], _digest(payload.code)):
+        await db.user_verification_codes.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Invalid or expired code.")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": _hash_pw(payload.password), "verified": True}},
+    )
+    await db.user_verification_codes.update_one({"_id": rec["_id"]}, {"$set": {"consumed": True}})
+    # Revoke every existing session so the user has to log in again.
+    await db.user_sessions.update_many(
+        {"user_id": user["user_id"], "revoked_at": None},
+        {"$set": {"revoked_at": now_}},
+    )
+    token = await _issue_session(user["user_id"])
+    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    return {"session_token": token, "user": _public_user(fresh)}
+
+
 @api_router.get("/auth/me")
 async def auth_me(authorization: Optional[str] = Header(None)):
     user = await require_user(authorization)
-    return {"user": user}
+    return {"user": _public_user(user)}
 
 
 @api_router.post("/auth/logout")
 async def auth_logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip()
-        await db.user_sessions.delete_one({"session_token": token})
+        await db.user_sessions.update_one(
+            {"token_hash": _digest(token), "revoked_at": None},
+            {"$set": {"revoked_at": utcnow()}},
+        )
     return {"ok": True}
 
 
@@ -864,17 +1183,19 @@ async def admin_leads_csv(x_admin_key: Optional[str] = Header(None)):
     import csv
     buf = StringIO()
     w = csv.writer(buf)
-    w.writerow(["email", "name", "retirement_stage", "created_at", "last_login", "user_id", "picture", "source"])
+    w.writerow(["email", "first_name", "last_name", "phone", "retirement_stage", "verified", "created_at", "last_login", "user_id", "source"])
     for d in docs:
         w.writerow([
             d.get("email", ""),
-            d.get("name", ""),
+            d.get("first_name", ""),
+            d.get("last_name", ""),
+            d.get("phone", ""),
             d.get("retirement_stage") or "",
+            "yes" if d.get("verified") else "no",
             d.get("created_at").isoformat() if isinstance(d.get("created_at"), datetime) else (d.get("created_at") or ""),
             d.get("last_login").isoformat() if isinstance(d.get("last_login"), datetime) else (d.get("last_login") or ""),
             d.get("user_id", ""),
-            d.get("picture") or "",
-            d.get("source") or "google",
+            d.get("source") or "email",
         ])
     from fastapi.responses import Response
     return Response(content=buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=retirementorship-leads.csv"})
@@ -909,12 +1230,21 @@ async def on_startup():
     try:
         await db.users.create_index("email", unique=True)
         await db.users.create_index("user_id", unique=True)
-        await db.user_sessions.create_index("session_token", unique=True)
+        # New session shape uses token_hash. Best-effort: drop the legacy session_token index if it exists.
+        try:
+            await db.user_sessions.drop_index("session_token_1")
+        except Exception:
+            pass
+        await db.user_sessions.create_index("token_hash", unique=True, sparse=True)
         await db.user_sessions.create_index("user_id")
         await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+        await db.user_verification_codes.create_index("expires_at", expireAfterSeconds=0)
+        await db.user_verification_codes.create_index([("user_id", 1), ("created_at", -1)])
+        await db.login_attempts.create_index("key", unique=True)
         await db.bookmarks.create_index([("user_id", 1), ("post_id", 1)], unique=True)
         await db.history.create_index([("user_id", 1), ("post_id", 1)], unique=True)
         await db.book_progress.create_index([("user_id", 1), ("book_id", 1)], unique=True)
+
         # One-time migration: convert any existing int post_ids to strings
         try:
             for coll_name in ("bookmarks", "history"):
@@ -924,6 +1254,26 @@ async def on_startup():
                     await coll.update_one({"_id": doc["_id"]}, {"$set": {"post_id": str(doc["post_id"])}})
         except Exception as mig_e:
             logger.warning(f"post_id migration skipped: {mig_e}")
+
+        # Auth migration: wipe legacy Google-sourced accounts and their sessions
+        # (user requested option 3a on the auth switch — dev only, no real users yet).
+        try:
+            legacy = await db.users.find(
+                {"$or": [{"source": "google"}, {"password_hash": {"$exists": False}}]},
+                {"user_id": 1, "_id": 0},
+            ).to_list(10000)
+            legacy_ids = [u["user_id"] for u in legacy if u.get("user_id")]
+            if legacy_ids:
+                await db.users.delete_many({"user_id": {"$in": legacy_ids}})
+                await db.user_sessions.delete_many({"user_id": {"$in": legacy_ids}})
+                await db.bookmarks.delete_many({"user_id": {"$in": legacy_ids}})
+                await db.history.delete_many({"user_id": {"$in": legacy_ids}})
+                await db.book_progress.delete_many({"user_id": {"$in": legacy_ids}})
+                await db.user_verification_codes.delete_many({"user_id": {"$in": legacy_ids}})
+                logger.info(f"Wiped {len(legacy_ids)} legacy Google user(s) on auth switch")
+        except Exception as auth_mig_e:
+            logger.warning(f"legacy auth wipe skipped: {auth_mig_e}")
+
         logger.info("Indexes ensured")
     except Exception as e:
         logger.warning(f"Index setup: {e}")

@@ -64,7 +64,7 @@ export default function BookScreen() {
 
   const toggleBookmark = useCallback(async () => {
     if (!book) return;
-    if (!user) { router.push("/(tabs)/profile"); return; }
+    if (!user) { router.push("/(auth)/login"); return; }
     const kind = String(book.id).startsWith("mag-") ? "magazine" : "book";
     try {
       if (bookmarked) {
