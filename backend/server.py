@@ -429,6 +429,119 @@ async def user_history_add(payload: HistoryIn, authorization: Optional[str] = He
     return {"ok": True}
 
 
+# ---- Custom content types: books, magazines, videos ----
+BOOK_FALLBACK: List[dict] = [
+    {
+        "id": "book-3d-retirement-income",
+        "slug": "3d-retirement-income",
+        "title": "3D Retirement Income",
+        "subtitle": "A framework for durable, diversified, and dependable retirement income.",
+        "author": "RetireMentorship",
+        "cover_gradient": ["#4B3166", "#7A5B99"],
+        "accent": "#C5A059",
+        "chapters": 12,
+        "reading_time": 180,
+        "image": None,
+        "excerpt": "Learn the three dimensions of a resilient retirement paycheck: guaranteed income, growth income, and flexible income. Practical, plain-English strategies to keep you in control.",
+        "content_html": "",
+        "type": "book",
+    },
+    {
+        "id": "book-tax-saving-strategies",
+        "slug": "tax-saving-strategies",
+        "title": "Tax Saving Strategies",
+        "subtitle": "Legally keep more of what you've earned in retirement.",
+        "author": "RetireMentorship",
+        "cover_gradient": ["#B0793A", "#C5A059"],
+        "accent": "#4B3166",
+        "chapters": 10,
+        "reading_time": 150,
+        "image": None,
+        "excerpt": "From Roth conversions to Social Security taxability, from RMDs to charitable stacking — the tax-smart playbook every retiree needs.",
+        "content_html": "",
+        "type": "book",
+    },
+]
+
+
+def _transform_cpt(p: dict, cpt: str) -> dict:
+    """Transform a WordPress custom post type (book/magazine) response."""
+    embedded = p.get("_embedded", {}) or {}
+    featured = (embedded.get("wp:featuredmedia") or [{}])[0] or {}
+    title = strip_html((p.get("title") or {}).get("rendered", ""))
+    excerpt = strip_html((p.get("excerpt") or {}).get("rendered", ""))
+    content_html = (p.get("content") or {}).get("rendered", "")
+    return {
+        "id": p.get("id"),
+        "slug": p.get("slug"),
+        "title": title,
+        "excerpt": excerpt,
+        "content_html": content_html,
+        "date": p.get("date"),
+        "modified": p.get("modified"),
+        "link": p.get("link"),
+        "image": featured.get("source_url"),
+        "image_alt": featured.get("alt_text") or title,
+        "type": cpt,
+    }
+
+
+async def _fetch_cpt(cpt: str) -> List[dict]:
+    """Try to fetch a WP custom post type. Return [] if the CPT is not registered."""
+    try:
+        data = await wp_get(f"/{cpt}", {"per_page": 20, "_embed": 1}, ttl=180)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [_transform_cpt(p, cpt) for p in data]
+
+
+@api_router.get("/books")
+async def list_books():
+    items = await _fetch_cpt("book")
+    if not items:
+        items = BOOK_FALLBACK
+    return items
+
+
+@api_router.get("/books/{book_id}")
+async def get_book(book_id: str):
+    # Try WordPress first (numeric id → CPT)
+    if book_id.isdigit():
+        try:
+            data = await wp_get(f"/book/{book_id}", {"_embed": 1}, ttl=180)
+            if isinstance(data, dict) and data.get("id"):
+                return _transform_cpt(data, "book")
+        except Exception:
+            pass
+    # Fall back to seed
+    for b in BOOK_FALLBACK:
+        if b["id"] == book_id or b["slug"] == book_id:
+            return b
+    raise HTTPException(status_code=404, detail="Book not found")
+
+
+@api_router.get("/magazines")
+async def list_magazines():
+    items = await _fetch_cpt("magazine")
+    return items  # empty until you register the CPT — the UI shows a nice "coming soon" state
+
+
+@api_router.get("/videos")
+async def list_videos(limit: int = 20):
+    # Try a dedicated CPT first
+    items = await _fetch_cpt("video")
+    if items:
+        return items[:limit]
+    # Otherwise synthesize from posts whose content embeds YouTube/Vimeo
+    data = await wp_get("/posts", {"per_page": min(limit, 20), "_embed": 1, "orderby": "date", "order": "desc"})
+    if not isinstance(data, list):
+        data = []
+    all_posts = [transform_post(p) for p in data]
+    return [p for p in all_posts if p["type"] == "video"][:limit]
+
+
 @api_router.get("/")
 async def root():
     return {"service": "RetireMentorship API", "ok": True}

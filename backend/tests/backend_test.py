@@ -259,6 +259,74 @@ class TestWPLatestModified:
             f"missing/invalid `id`: {body.get('id')!r}"
 
 
+# ---- Custom content types: books/magazines/videos (iteration 4) ----
+class TestBooksMagazinesVideos:
+    """Books CPT not registered in WP → backend returns 2 hardcoded seed books.
+    Magazines CPT not registered → []. Videos derived from posts w/ YouTube embeds."""
+
+    def test_books_list_returns_two_seed_books(self, api_client):
+        r = api_client.get(f"{API}/books", timeout=30)
+        assert r.status_code == 200, r.text
+        items = r.json()
+        assert isinstance(items, list), f"books not a list: {type(items)}"
+        assert len(items) == 2, f"expected exactly 2 seed books, got {len(items)}"
+        titles = sorted(b.get("title", "") for b in items)
+        assert titles == sorted(["3D Retirement Income", "Tax Saving Strategies"]), \
+            f"unexpected titles: {titles}"
+        for b in items:
+            for k in ("id", "slug", "title", "excerpt", "type"):
+                assert k in b, f"book missing key {k}: {b}"
+            assert b["type"] == "book", f"expected type=='book' got {b['type']!r}"
+            assert isinstance(b["title"], str) and b["title"].strip()
+            assert isinstance(b["slug"], str) and b["slug"].strip()
+            assert isinstance(b["excerpt"], str) and b["excerpt"].strip()
+
+    def test_get_book_by_slug_3d_retirement_income(self, api_client):
+        r = api_client.get(f"{API}/books/book-3d-retirement-income", timeout=30)
+        assert r.status_code == 200, r.text
+        b = r.json()
+        assert b.get("title") == "3D Retirement Income", f"unexpected title: {b.get('title')}"
+        assert b.get("type") == "book"
+        assert b.get("id") == "book-3d-retirement-income"
+
+    def test_get_book_by_slug_tax_saving_strategies(self, api_client):
+        r = api_client.get(f"{API}/books/book-tax-saving-strategies", timeout=30)
+        assert r.status_code == 200, r.text
+        b = r.json()
+        assert b.get("title") == "Tax Saving Strategies", f"unexpected title: {b.get('title')}"
+        assert b.get("type") == "book"
+        assert b.get("id") == "book-tax-saving-strategies"
+
+    def test_get_book_not_found_returns_404(self, api_client):
+        r = api_client.get(f"{API}/books/does-not-exist", timeout=30)
+        assert r.status_code == 404, f"expected 404, got {r.status_code}: {r.text}"
+
+    def test_magazines_returns_empty_list(self, api_client):
+        # WP CPT not registered → backend must return [] with 200
+        # Retry once with 3-5s pause on WP-dependent empties per request spec
+        r = api_client.get(f"{API}/magazines", timeout=30)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert isinstance(body, list), f"magazines not a list: {type(body)}"
+        assert body == [], f"expected empty list, got {body!r}"
+
+    def test_videos_list_shape_and_type(self, api_client):
+        # Retry once with pause because WP posts is upstream (possible 429)
+        items = None
+        for attempt in range(2):
+            r = api_client.get(f"{API}/videos", params={"limit": 5}, timeout=45)
+            assert r.status_code == 200, r.text
+            items = r.json()
+            if isinstance(items, list) and len(items) >= 1:
+                break
+            time.sleep(4)
+        assert isinstance(items, list), f"videos not a list: {type(items)}"
+        assert 1 <= len(items) <= 5, f"expected 1..5 items, got {len(items)}"
+        for v in items:
+            assert v.get("type") == "video", f"expected type=='video', got {v.get('type')!r}"
+            assert "id" in v and "title" in v
+
+
 # ---- Admin lead-gen endpoints (iteration 3) ----
 class TestAdminLeads:
     def test_admin_leads_without_key_returns_401(self):

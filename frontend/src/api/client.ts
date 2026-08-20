@@ -32,6 +32,34 @@ export type HomeFeed = {
 
 export type CategoryT = { id: number; name: string; slug: string; count: number };
 
+export type BookT = {
+  id: string | number;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  author?: string;
+  excerpt?: string;
+  content_html?: string;
+  image?: string | null;
+  cover_gradient?: string[];
+  accent?: string;
+  chapters?: number;
+  reading_time?: number;
+  type: "book";
+  modified?: string;
+};
+
+export type MagazineT = {
+  id: string | number;
+  slug: string;
+  title: string;
+  excerpt?: string;
+  image?: string | null;
+  content_html?: string;
+  date?: string;
+  type: "magazine";
+};
+
 export type User = {
   user_id: string;
   email: string;
@@ -115,6 +143,12 @@ export const api = {
   history: () => req<any[]>("/user/history"),
   addHistory: (h: { post_id: number; title: string; image?: string; category?: string; type?: string; progress?: number }) =>
     req("/user/history", { method: "POST", body: JSON.stringify(h) }),
+
+  // Content types
+  books: () => req<BookT[]>("/books"),
+  book: (id: string | number) => req<BookT>(`/books/${id}`),
+  magazines: () => req<MagazineT[]>("/magazines"),
+  videos: (limit = 12) => req<WPPost[]>(`/videos?limit=${limit}`),
 };
 
 // -------- Cached wrappers (cache-first + background revalidate) --------
@@ -125,6 +159,10 @@ const K = {
   categories: () => "categories",
   post: (id: number) => `post:${id}`,
   category: (id: number) => `category:${id}`,
+  books: () => "books",
+  book: (id: string | number) => `book:${id}`,
+  magazines: () => "magazines",
+  videos: () => "videos",
 };
 
 export const cachedApi = {
@@ -181,6 +219,21 @@ export const cachedApi = {
       () => api.posts({ category: id, per_page: 20 }),
       handlers
     );
+  },
+  books(handlers: { onCache?: (d: BookT[] | null) => void; onFresh?: (d: BookT[]) => void } = {}) {
+    return cache.staleWhileRevalidate<BookT[]>(K.books(), () => api.books(), handlers);
+  },
+  book(
+    id: string | number,
+    handlers: { onCache?: (d: BookT | null) => void; onFresh?: (d: BookT) => void } = {}
+  ) {
+    return cache.staleWhileRevalidate<BookT>(K.book(id), () => api.book(id), handlers);
+  },
+  magazines(handlers: { onCache?: (d: MagazineT[] | null) => void; onFresh?: (d: MagazineT[]) => void } = {}) {
+    return cache.staleWhileRevalidate<MagazineT[]>(K.magazines(), () => api.magazines(), handlers);
+  },
+  videos(handlers: { onCache?: (d: WPPost[] | null) => void; onFresh?: (d: WPPost[]) => void } = {}) {
+    return cache.staleWhileRevalidate<WPPost[]>(K.videos(), () => api.videos(20), handlers);
   },
 };
 

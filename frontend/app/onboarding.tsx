@@ -66,7 +66,7 @@ export default function Onboarding() {
             <Text style={{ color: colors.brandPrimary }}>{BRAND.taglineLine2}</Text>
           </Text>
           <Muted style={styles.heroSub}>
-            Beautiful, expert-led lessons on the topics that matter most in retirement.
+            Your mentor to and through retirement.
           </Muted>
         </SafeAreaView>
       </LinearGradient>

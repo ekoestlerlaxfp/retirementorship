@@ -1,58 +1,65 @@
 # RetireMentorship — Product Requirements & Build Notes
 
 ## Vision
-The #1 retirement education mobile app. Not a financial planner app — an elegant, calming, MasterClass-quality learning platform for people 50–75. Educates first, generates qualified leads second (via a non-intrusive "Talk to an advisor" Calendly CTA).
+The #1 retirement education mobile app. Not a financial planner app — an elegant, calming, MasterClass-quality learning platform for people 50–75. Educates first, generates qualified leads second.
 
 Tagline: **"Retire Successfully. Stay Successfully Retired."**
+Sub-tagline (onboarding): **"Your mentor to and through retirement."**
 
 ## Content pipeline — WordPress is the source of truth
 - All articles, videos, categories flow from `https://retirementorship.com/wp-json/wp/v2/*`.
-- Backend proxies with a 3-min in-memory cache, 429 stale-fallback, empty-search retry.
+- Backend proxies with a 3-min in-memory cache, 429 stale-fallback.
 - `GET /api/wp/latest-modified` gives the newest post's `modified` timestamp for cheap freshness checks.
-- Frontend uses **stale-while-revalidate**: instant paint from cache, then background refresh from WordPress on mount **AND** on every AppState `active` event (foreground) — new posts appear without any new app release.
+- Stale-while-revalidate on every screen: instant paint from cache, then refresh on mount AND on foreground.
+
+## Custom content types
+- **Books** (`GET /api/books`, `GET /api/books/{id}`): tries WP CPT `book`, falls back to two seeded books wired today:
+  - `3D Retirement Income` (purple gradient cover)
+  - `Tax Saving Strategies` (gold gradient cover)
+  When you register a `book` CPT in WordPress, the backend picks it up automatically and seed data drops out.
+- **Magazines** (`GET /api/magazines`): tries WP CPT `magazine`, returns `[]` until you register the CPT. UI hides the rail while empty.
+- **Videos** (`GET /api/videos?limit=N`): tries WP CPT `video`, else synthesises from posts that embed YouTube/Vimeo.
 
 ## Lead generation
-- Every Google sign-in captures **email + name + picture + user_id + retirement_stage** into MongoDB.
-- **Admin export**: `GET /api/admin/leads` (JSON) and `/api/admin/leads.csv` (CSV) gated by `X-Admin-Key` header (see `.env` `ADMIN_API_KEY`).
-- **Optional webhook**: set `LEADS_WEBHOOK_URL` in `.env` to fire a POST on every new signup — plug it into Zapier / Make / HubSpot / email.
-- Calendly CTA card is placed on Home, Tools, Profile, and the bottom of every article.
+- Every Google sign-in stores email + name + picture + retirement stage.
+- Admin export: `GET /api/admin/leads` (JSON) and `/api/admin/leads.csv` (CSV) gated by `X-Admin-Key` header (`.env` `ADMIN_API_KEY`).
+- Optional webhook: `LEADS_WEBHOOK_URL` fires POST on new signup.
+- Calendly CTA cards throughout the app.
 
 ## User flows (Phase 1 delivered)
 1. Guest onboarding → pick retirement stage → Home
-2. Home → floating brand row w/ freshness pill · headline · **large hero (36px rounded)** · Today's Tip · Continue Reading (from local progress) · Latest · Videos · Trending · Advisor CTA · Recommended
-3. Learn → featured tiles + grid of WP topics
-4. Category → 2-column article grid
-5. Article reader → hero/YouTube, big title, meta, rich HTML, bookmark, share, save-for-offline (persists cover via expo-file-system), scroll-driven reading progress, advisor CTA
-6. Global search → debounced WP full-text, empty-retry safeguard
-7. Tools → 3 live calculators (WordPress-hosted, opened in system browser). RMD & Roth = "Soon"
-8. Library → Bookmarks / History tabs; guest state prompts sign-in
-9. Profile → Avatar, name, stage badge, Google sign-in, Downloads & storage, advisor CTA
-10. Downloads & storage — cached size, downloaded files, reading-progress count, delete + clear-cache
+2. Home rails → hero · Today's Tip · **Books from RetireMentorship** · Continue Reading · Latest · Videos · Trending · Magazines (when populated) · Advisor CTA · Recommended
+3. Book detail (`/book/[id]`) — beautiful gradient cover, chapters + reading-time chips, excerpt, "Start reading" (when content published) or "Coming soon" state, "Talk to a mentor about this" CTA
+4. Learn → categories tiles + full grid
+5. Category → 2-column article grid
+6. Article reader → hero/YouTube, HTML body, bookmark, share, save-for-offline, scroll-driven reading progress, advisor CTA
+7. Global search → debounced WP full-text
+8. Tools → 3 live calculators. RMD & Roth = "Soon"
+9. Library → Bookmarks / History
+10. Profile → Google sign-in, Downloads & storage, advisor CTA
+11. Downloads & storage — cached size, downloaded files, reading-progress count
 
-## Design system (updated for Apple 2026 look)
-- Palette: warm cream `#FAF8F5`, gold `#C5A059`, deep purple `#4B3166` for CTAs
-- Radius scale: **sm 12, md 20, lg 28, xl 36** (chunkier than before)
-- Softer, deeper shadows (blur 20–32, low opacity)
-- **Floating pill tab bar** (rounded 28) with gold-tinted glass — sits above safe-area with 16pt inset
-- Base body 17pt, headline 30pt, hero 32pt — richer letter-spacing (-0.6 on displays)
-- Cards get 0.5px inner ring + light shadow for premium depth
-- Gold RM monogram logo in onboarding hero, home header, profile footer
+## Design system (Apple 2026 look)
+- Palette: warm cream, gold, deep purple. Radius sm 12 · md 20 · lg 28 · xl 36.
+- Floating pill tab bar (rounded 28) with gold-tinted glass. Softer, deeper shadows.
+- Body 17pt, headline 30pt, hero 32pt, letter-spacing -0.6.
+- Gold RM monogram in onboarding hero, home header, profile footer, and every book cover as gold-foil accent.
 
-## Offline / caching (from prior iteration, still active)
-- `src/offline/cache.ts` — namespaced JSON KV cache, `staleWhileRevalidate`
+## Offline layer
+- `src/offline/cache.ts` — JSON KV cache w/ `staleWhileRevalidate`
 - `src/offline/progress.ts` — per-post scroll progress → Continue Reading rail
-- `src/offline/downloads.ts` — expo-file-system binary downloads registry (ready for books/magazines/PDFs)
+- `src/offline/downloads.ts` — expo-file-system registry (ready for magazine PDFs, book chapters)
 
 ## Env
 - Backend: `MONGO_URL`, `DB_NAME`, `ADMIN_API_KEY`, `LEADS_WEBHOOK_URL`
 - Frontend: `EXPO_PUBLIC_BACKEND_URL`
-- Calendly URL configurable in `/app/frontend/src/theme.ts` (`CALENDLY_URL`)
-- Brand assets in `BRAND` constant in same file
+- Calendly URL configurable in `/app/frontend/src/theme.ts`
 
 ## Phase 2 backlog
 - Native interactive calculators (RMD, Roth, Retirement Income)
-- Books, magazines, podcasts (needs WP custom post types — download system is ready)
-- Flowchart pinch-zoom viewer
+- Full book reader (chapter list, in-app text) once WP `book` CPT is populated
+- Magazine flipbook viewer once WP `magazine` CPT is populated
 - Push notifications (Emergent-managed)
 - AI retirement coach (Claude via Emergent key)
+- Flowchart pinch-zoom viewer
 - Advisor directory, workshop registration

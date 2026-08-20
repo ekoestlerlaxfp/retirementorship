@@ -6,13 +6,14 @@ import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, stages, BRAND, shadow } from "@/src/theme";
-import { api, cachedApi, type HomeFeed } from "@/src/api/client";
+import { api, cachedApi, type HomeFeed, type BookT, type MagazineT } from "@/src/api/client";
 import { HeroCard, ArticleCard, TrendingCard, TipCard, Rail } from "@/src/components/cards";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { CenteredLoader, Muted, EmptyState } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
 import { progress as progressStore, type ProgressEntry } from "@/src/offline";
 import { Image as ExpoImage } from "expo-image";
+import { BookCover, MagazineCover } from "@/src/components/BookCover";
 
 function formatSyncedAt(ts: number | null): string {
   if (!ts) return "Syncing…";
@@ -56,6 +57,8 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [continueReading, setContinueReading] = useState<ProgressEntry[]>([]);
+  const [books, setBooks] = useState<BookT[]>([]);
+  const [magazines, setMagazines] = useState<MagazineT[]>([]);
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const { user } = useAuth();
@@ -78,6 +81,15 @@ export default function Home() {
       },
       onError: () => { setLoading(false); setRefreshing(false); setSyncing(false); },
     });
+    // Content rails
+    cachedApi.books({
+      onCache: (d) => { if (d) setBooks(d); },
+      onFresh: (d) => setBooks(d),
+    }).catch(() => {});
+    cachedApi.magazines({
+      onCache: (d) => { if (d) setMagazines(d); },
+      onFresh: (d) => setMagazines(d),
+    }).catch(() => {});
     // Continue Reading rail (local progress)
     setContinueReading(await progressStore.recent(6));
   }, []);
@@ -154,6 +166,16 @@ export default function Home() {
           </View>
         )}
 
+        {books.length > 0 && (
+          <Rail
+            testID="rail-books"
+            title="Books from RetireMentorship"
+            subtitle="Long-form guides for real-world decisions"
+            data={books}
+            renderItem={(b) => <BookCover book={b} />}
+          />
+        )}
+
         {continueReading.length > 0 && (
           <Rail
             testID="rail-continue"
@@ -190,6 +212,16 @@ export default function Home() {
             title="Trending this week"
             data={feed.trending}
             renderItem={(p, i) => <TrendingCard post={p} rank={i + 1} />}
+          />
+        )}
+
+        {magazines.length > 0 && (
+          <Rail
+            testID="rail-magazines"
+            title="Magazines"
+            subtitle="Beautifully curated quarterly issues"
+            data={magazines}
+            renderItem={(m) => <MagazineCover mag={m} />}
           />
         )}
 
