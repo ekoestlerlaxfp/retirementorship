@@ -95,7 +95,7 @@ def transform_post(p: dict) -> dict:
     for group in terms:
         for t in group:
             if t.get("taxonomy") == "category":
-                category = {"id": t.get("id"), "name": t.get("name"), "slug": t.get("slug")}
+                category = {"id": t.get("id"), "name": _html.unescape(t.get("name") or ""), "slug": t.get("slug")}
                 break
         if category:
             break

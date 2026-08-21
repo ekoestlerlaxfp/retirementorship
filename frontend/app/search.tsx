@@ -11,13 +11,10 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api, WPPost, type CategoryT } from "@/src/api/client";
 import { EmptyState, Muted } from "@/src/components/ui";
 
-type TypeFilter = "all" | "articles" | "videos";
-
 const PER_PAGE = 20;
 
 export default function Search() {
   const [q, setQ] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [catFilter, setCatFilter] = useState<number | null>(null);
   const [cats, setCats] = useState<CategoryT[]>([]);
   const [results, setResults] = useState<WPPost[] | null>(null);
@@ -34,7 +31,7 @@ export default function Search() {
   }, []);
 
   const runSearch = useCallback(
-    async (text: string, opts: { type: TypeFilter; cat: number | null; page: number; append: boolean }) => {
+    async (text: string, opts: { cat: number | null; page: number; append: boolean }) => {
       const t = text.trim();
       if (!t) { setResults(null); setHasMore(false); setPage(1); return; }
       const mySeq = ++requestSeq.current;
@@ -45,15 +42,10 @@ export default function Search() {
         if (opts.cat) params.category = opts.cat;
         const raw = await api.posts(params);
         if (mySeq !== requestSeq.current) return; // discard stale response
-        const filtered = (raw || []).filter((p) => {
-          if (opts.type === "articles") return p.type === "article";
-          if (opts.type === "videos") return p.type === "video";
-          return true;
-        });
         setResults((prev) => {
-          if (!opts.append) return filtered;
+          if (!opts.append) return raw || [];
           const seen = new Set((prev || []).map((x) => x.id));
-          return [...(prev || []), ...filtered.filter((x) => !seen.has(x.id))];
+          return [...(prev || []), ...(raw || []).filter((x) => !seen.has(x.id))];
         });
         setPage(opts.page);
         setHasMore((raw?.length || 0) >= PER_PAGE);
@@ -68,20 +60,20 @@ export default function Search() {
     []
   );
 
-  // Debounced initial search when query, type, or category changes.
+  // Debounced initial search when query or category changes.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(
-      () => runSearch(q, { type: typeFilter, cat: catFilter, page: 1, append: false }),
+      () => runSearch(q, { cat: catFilter, page: 1, append: false }),
       350
     );
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [q, typeFilter, catFilter, runSearch]);
+  }, [q, catFilter, runSearch]);
 
   const loadMore = useCallback(() => {
     if (loading || loadingMore || !hasMore) return;
-    runSearch(q, { type: typeFilter, cat: catFilter, page: page + 1, append: true });
-  }, [loading, loadingMore, hasMore, q, typeFilter, catFilter, page, runSearch]);
+    runSearch(q, { cat: catFilter, page: page + 1, append: true });
+  }, [loading, loadingMore, hasMore, q, catFilter, page, runSearch]);
 
   // Top few categories by count for the filter chips.
   const topCats = useMemo(
@@ -118,35 +110,6 @@ export default function Search() {
             )}
           </View>
         </View>
-
-        {/* Type filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-          style={{ flexGrow: 0 }}
-        >
-          {(
-            [
-              { id: "all", label: "All", icon: "sparkles" },
-              { id: "articles", label: "Articles", icon: "document-text" },
-              { id: "videos", label: "Videos", icon: "play-circle" },
-            ] as { id: TypeFilter; label: string; icon: keyof typeof Ionicons.glyphMap }[]
-          ).map((t) => {
-            const active = typeFilter === t.id;
-            return (
-              <Pressable
-                key={t.id}
-                testID={`search-type-${t.id}`}
-                onPress={() => setTypeFilter(t.id)}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <Ionicons name={t.icon} size={14} color={active ? "#FFF" : colors.brandSecondary} />
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{t.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
 
         {/* Category filter chips */}
         {topCats.length > 0 ? (
@@ -186,7 +149,7 @@ export default function Search() {
             <Text style={styles.emptyKicker}>SEARCH THE WHOLE LIBRARY</Text>
             <Text style={styles.emptyTitle}>What are you curious about?</Text>
             <Muted style={{ marginTop: spacing.md }}>
-              Try &ldquo;roth conversion&rdquo;, &ldquo;medicare&rdquo;, &ldquo;social security&rdquo;, &ldquo;annuity&rdquo;, or a topic you&apos;re researching. Filter to just Articles or Videos above.
+              Try &ldquo;roth conversion&rdquo;, &ldquo;medicare&rdquo;, &ldquo;social security&rdquo;, &ldquo;annuity&rdquo;, or a topic you&apos;re researching. Filter by topic below.
             </Muted>
             {topCats.length > 0 ? (
               <>
