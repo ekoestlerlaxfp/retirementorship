@@ -597,7 +597,7 @@ async def wp_categories():
     # Sort by count desc client-side; filter out empty
     filtered = [c for c in data if c.get("count", 0) > 0]
     filtered.sort(key=lambda c: c.get("count", 0), reverse=True)
-    return [{"id": c["id"], "name": c["name"], "slug": c["slug"], "count": c.get("count", 0)} for c in filtered]
+    return [{"id": c["id"], "name": _html.unescape(c["name"] or ""), "slug": c["slug"], "count": c.get("count", 0)} for c in filtered]
 
 
 @api_router.get("/wp/posts")
