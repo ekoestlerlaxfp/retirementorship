@@ -18,6 +18,7 @@ export default function Search() {
   const [catFilter, setCatFilter] = useState<number | null>(null);
   const [cats, setCats] = useState<CategoryT[]>([]);
   const [results, setResults] = useState<WPPost[] | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,10 +34,27 @@ export default function Search() {
   const runSearch = useCallback(
     async (text: string, opts: { cat: number | null; page: number; append: boolean }) => {
       const t = text.trim();
-      if (!t) { setResults(null); setHasMore(false); setPage(1); return; }
+      if (!t) { setResults(null); setHasMore(false); setPage(1); setTotal(null); return; }
       const mySeq = ++requestSeq.current;
 
       if (opts.append) setLoadingMore(true); else setLoading(true);
+      // Kick off the total count in parallel (only on fresh searches, not append).
+      const fetchCount = () =>
+        api.postsCount({ search: t, category: opts.cat || undefined })
+          .then((c) => c.total || 0)
+          .catch(() => 0);
+      if (!opts.append) {
+        fetchCount().then((n) => {
+          if (mySeq !== requestSeq.current) return;
+          setTotal(n);
+          // WP sometimes rate-limits cold — retry once after a beat.
+          if (n === 0) {
+            setTimeout(() => {
+              fetchCount().then((m) => { if (mySeq === requestSeq.current && m > 0) setTotal(m); });
+            }, 1500);
+          }
+        });
+      }
       try {
         const params: any = { search: t, per_page: PER_PAGE, page: opts.page };
         if (opts.cat) params.category = opts.cat;
@@ -183,7 +201,9 @@ export default function Search() {
         ) : (
           <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.md, paddingBottom: 140 }}>
             <Text style={styles.countText}>
-              {totalShown} {totalShown === 1 ? "result" : "results"}{activeCat ? ` in ${activeCat.name}` : ""} for &ldquo;{q}&rdquo;
+              {total && total > totalShown
+                ? `Showing ${totalShown} of ${total}${activeCat ? ` in ${activeCat.name}` : ""} for “${q}”`
+                : `${totalShown} ${totalShown === 1 ? "result" : "results"}${activeCat ? ` in ${activeCat.name}` : ""} for “${q}”`}
             </Text>
             {(results || []).map((p) => (
               <Pressable
@@ -213,7 +233,11 @@ export default function Search() {
                     ) : null}
                   </View>
                   <Text style={styles.rowTitle} numberOfLines={3}>{p.title}</Text>
-                  <Text style={styles.rowMeta}>{p.type === "video" ? "Watch" : `${p.reading_time} min read`}</Text>
+                  <Text style={styles.rowMeta}>
+                    {p.date ? new Date(p.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""}
+                    {p.date ? " · " : ""}
+                    {p.type === "video" ? "Watch" : `${p.reading_time} min read`}
+                  </Text>
                 </View>
               </Pressable>
             ))}
@@ -226,7 +250,13 @@ export default function Search() {
                 style={({ pressed }) => [styles.loadMore, pressed && { opacity: 0.85 }, loadingMore && { opacity: 0.6 }]}
               >
                 <Ionicons name={loadingMore ? "hourglass" : "chevron-down"} size={16} color={colors.brandSecondary} />
-                <Text style={styles.loadMoreText}>{loadingMore ? "Loading…" : "Load more results"}</Text>
+                <Text style={styles.loadMoreText}>
+                  {loadingMore
+                    ? "Loading…"
+                    : total && total > totalShown
+                      ? `Load ${Math.min(PER_PAGE, total - totalShown)} more`
+                      : "Load more results"}
+                </Text>
               </Pressable>
             ) : (
               <View style={styles.endCap}>

@@ -624,6 +624,62 @@ async def wp_posts(
     return [transform_post(p) for p in data]
 
 
+async def _wp_get_total(params: Dict[str, Any], cache_key: str) -> int:
+    """Fetch X-WP-Total for the given params with a short TTL cache + retry so
+    WP cold-start rate limits don't silently return 0.
+    """
+    now = time.time()
+    entry = _cache.get(cache_key)
+    if entry and entry[0] > now:
+        return entry[1]
+    headers = {"User-Agent": "RetireMentorship/1.0 (mobile app)"}
+    last_total = 0
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=15.0, headers=headers) as hc:
+                r = await hc.get(f"{WP_BASE}/posts", params=params)
+                if r.status_code == 200:
+                    total = int(r.headers.get("X-WP-Total", "0"))
+                    if total > 0:
+                        _cache[cache_key] = (now + 120, total)
+                        return total
+                    # Received 200 but X-WP-Total=0 — could be a genuine no-match
+                    # OR a WP hiccup. Retry with backoff a couple of times.
+                    last_total = total
+                    if attempt < 2:
+                        await asyncio.sleep(0.8 * (attempt + 1))
+                        continue
+                    _cache[cache_key] = (now + 30, total)  # short cache — may still be a hiccup
+                    return total
+                elif r.status_code in (429, 503):
+                    await asyncio.sleep(0.8 * (attempt + 1))
+                    continue
+                else:
+                    logger.warning(f"wp total unexpected {r.status_code}: {r.text[:120]}")
+                    return 0
+        except Exception as e:
+            logger.warning(f"wp total attempt {attempt+1} failed: {e}")
+            await asyncio.sleep(0.5)
+    return last_total
+
+
+@api_router.get("/wp/posts/count")
+async def wp_posts_count(
+    category: Optional[int] = None,
+    search: Optional[str] = None,
+):
+    """Return the total post count matching an optional search + category so the
+    search UI can show "20 of 53 shown"."""
+    params: Dict[str, Any] = {"per_page": 1}
+    if category:
+        params["categories"] = category
+    if search:
+        params["search"] = search
+    cache_key = f"/posts/count?{sorted(params.items())}"
+    total = await _wp_get_total(params, cache_key)
+    return {"total": total}
+
+
 @api_router.get("/wp/posts/{post_id}")
 async def wp_post(post_id: int):
     data = await wp_get(f"/posts/{post_id}", {"_embed": 1})

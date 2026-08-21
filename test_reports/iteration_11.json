@@ -1,0 +1,65 @@
+{
+  "summary": "Verified the search-count fix. Backend routes work individually but the new /api/wp/posts/count endpoint has a CRITICAL reliability bug: it lacks the retry/cache logic that wp_get() provides, so WP rate-limit/cold-start returns {\"total\":0}. Because the frontend only fetches the count once per query and uses `total && total > totalShown` to decide the label, a 0 makes the UI fall back to the OLD format 'X results for q' and the Load More button says 'Load more results' — exactly the user-reported symptom. Reproduced in browser (Direct fetch #1 -> 0, #2 -> 53; UI stuck showing '20 results for roth'). 6/7 backend tests pass; the failing test is the intermittent all-posts count (returned 0 then 196 on retry). Pagination, category filter, date ordering, and recent-2026 posts in results are all working as expected.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/wp/posts/count",
+        "issue": "No retry and no cache. When WP returns 429 or any non-200 (very common on cold start), the handler silently returns {total:0}. This is the root cause of the user's original complaint — the fix is being defeated by an unreliable count call. Fix: route through wp_get() like /wp/posts does (with retry + short TTL cache) and parse X-WP-Total from the response headers, OR wrap the httpx call with the same 3-attempt retry loop used in wp_get and cache the result for ~60s. Reference: /app/backend/server.py:627-648",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/wp/posts/count",
+        "issue": "wp_get() caches X-WP-Total only in the response body — but the count route uses raw httpx and can't reuse wp_get()'s cache directly. Consider a helper wp_head(path, params) that returns headers with cache + retry."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "search.tsx count text",
+        "issue": "Falls back to old '20 results for q' when postsCount returns 0. Not a bug in this file per se, but consider: when total<=totalShown and hasMore is also true, that's a paradox — could log/console.warn to catch future regressions. Reference: /app/frontend/app/search.tsx:192-196",
+        "testID": "n/a (Text node)",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "search.tsx result card",
+        "issue": "Result cards don't render the post date. The review requested verifying 'at least one visible result has a 2026 date in its metadata' — the metadata currently shows only category + title + reading_time (line 217-225). Backend response includes p.date, but it's not rendered. Reference: /app/frontend/app/search.tsx:216-226",
+        "testID": "search-result-<id>",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Search -> count -> label rendering",
+        "issue": "api.postsCount fires once, silently swallows errors (`.catch(() => {})`), and never retries. Combined with backend returning 0 on 429, users see 'N results' + 'Load more results' — the exact pre-fix experience. Recommend either (a) backend retry/cache OR (b) frontend: if total===0 && results.length>=PER_PAGE, retry the count once after 1.5s. Reference: /app/frontend/app/search.tsx:42-46",
+        "affected_testIDs": ["search-input", "search-load-more"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11_search_count.py",
+    "/app/test_reports/pytest/iteration11_results.xml"
+  ],
+  "action_items": [
+    "PRIMARY FIX: Make /api/wp/posts/count reliable. Refactor to use retry (like wp_get) and a small 60-120s cache. Example: reuse wp_get by requesting per_page=1 and returning len; OR duplicate the retry loop and read X-WP-Total on 200. Right now every WP cold-start returns 0 and defeats the intended UX fix.",
+    "SECONDARY (optional but recommended): In search.tsx runSearch, if `total===0` but the results page came back full (raw.length >= PER_PAGE), retry api.postsCount once after ~1.5s so the label self-heals when backend cache warms.",
+    "OPTIONAL UI: Add the article date (e.g., 'Jan 12, 2026 · 6 min read') to search result cards so users can visually confirm recent posts appear (this was one of the user's original observations).",
+    "Re-test after fix: hit /api/wp/posts/count?search=roth 3 times in a row from a cold state; every response must be > 0. Then open /search, type 'roth', verify UI reads 'Showing 20 of 53 for roth' and Load More reads 'Load 20 more'."
+  ],
+  "critical_code_review_comments": [
+    "server.py wp_posts_count (line 627) duplicates the httpx client setup instead of reusing wp_get — this is why it's missing retry+cache. Encapsulate a shared helper (e.g., _wp_request that returns (body, headers)) and use it in both endpoints.",
+    "search.tsx line 44: silent `.catch(() => {})` on postsCount hides all errors — at minimum log to console in dev.",
+    "wp_posts_count returns 0 on error which is indistinguishable from 'legitimately zero results' — consider returning null/omitting field so frontend can show 'Showing 20 results' (no of-total) instead of the confusing fallback."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "86% (6/7 tests; the 1 failure is the exact bug reported)", "frontend": "60% (empty state, results list, pagination, category chip, clear button work; count label & load-more label do NOT match spec because backend returns 0)"},
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The count endpoint is intermittent. To reproduce the bug: (1) wait 60+ seconds for backend cache to expire, (2) open /search, type 'roth', (3) observe count text says '20 results for roth' not 'Showing 20 of 53 for roth'. Direct API test: `curl /api/wp/posts/count?search=roth` — often returns {\"total\":0} on the first hit, {\"total\":53} on subsequent. Backend test file /app/backend/tests/test_iteration11_search_count.py already includes the coverage; the test_count_all_posts flake demonstrates the bug. After the fix, run: pytest /app/backend/tests/test_iteration11_search_count.py -v.",
+  "rca_of_issue": "Original user report: 'search results only show a few posts and none recent'. Real cause: user was confused by the count label showing e.g. '20 results' when WP has 53. Applied fix added a /api/wp/posts/count endpoint + a 'Showing X of Y' label. However, the new endpoint uses raw httpx WITHOUT retry or cache, unlike wp_get(). When WordPress rate-limits (429) or cold-starts, it silently returns 0. Frontend then evaluates `0 && 0 > 20` = false and falls back to the OLD 'N results' text, defeating the fix. Reproduction: two consecutive curls to /api/wp/posts/count?search=roth returned 0, then 53. Fix: mirror wp_get's retry-and-cache behavior in the count endpoint (or delegate to wp_get and count the returned list via a dedicated helper that surfaces X-WP-Total)."
+}

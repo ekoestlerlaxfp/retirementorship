@@ -1,0 +1,39 @@
+{
+  "summary": "Re-verified the search count fix after the retry-and-cache patch. Backend cold-start (backend restarted before test) returned correct totals for every query: roth=53, medicare=20, all=196, retirement+category=58, nonsense=0. Second call is served from cache in ~0.2s. Frontend: 'Showing 20 of 53 for roth' renders correctly on first search, result cards now show the post date ('Mar 26, 2026 · Watch'), Load More reads 'Load 20 more', updates to 'Load 13 more', and disappears with 'END OF RESULTS · 53 SHOWN' after reaching 53. Empty-state renders correctly for a no-match query. 9/9 pytest tests pass sequentially. One caveat: under pytest-xdist parallel workers hammering WP in parallel, WP rate-limits enough 429s in a row to exhaust the 3-attempt backoff and the endpoint can return 0 — not a real user-facing scenario, but worth noting.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/wp/posts/count",
+        "issue": "Under highly concurrent load (e.g., pytest-xdist with 2 workers hammering WP simultaneously), 3 consecutive 429s can exhaust the retry loop and the endpoint returns 0. Not a real end-user scenario (users make sequential requests), but if desired: bump attempts to 4 or add jittered backoff. Reference: /app/backend/server.py:637-663"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11_search_count.py",
+    "/app/test_reports/pytest/iteration12_results.xml"
+  ],
+  "action_items": [
+    "No blocking issues. Fix is verified end-to-end. Optional: to make count endpoint even more resilient under bursty load, extend the 3-attempt retry to 4 attempts with jittered backoff — but current behavior meets the review spec on cold-start."
+  ],
+  "critical_code_review_comments": [
+    "_wp_get_total() cleanly separates the WP total lookup with retry + short-TTL cache (120s non-zero, 30s zero). Reads well.",
+    "Frontend belt-and-suspenders retry after 1.5s (search.tsx:51-55) is a nice safety net; correctly guarded by requestSeq to avoid stale-response race.",
+    "Consider adding a testID to the count Text node (search.tsx:203) so future tests can select it deterministically instead of relying on regex text match."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration11_search_count.py (added test_count_nomatch_returns_zero and test_count_cached_second_call_is_fast)"
+  ],
+  "success_rate": {"backend": "100% (9/9 sequential)", "frontend": "100% (all 7 review checks pass)"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fix is complete and verified. If touched again, cold-start verification is: `sudo supervisorctl restart backend && sleep 4 && curl $EXPO_PUBLIC_BACKEND_URL/api/wp/posts/count?search=roth` — must return {\"total\":53} first hit. Frontend regression check: /search → type 'roth' → 'Showing 20 of 53 for roth', Load More label 'Load 20 more', cards show a date. Pytest: `pytest backend/tests/test_iteration11_search_count.py -v -o addopts=''` (disable xdist to avoid concurrent WP rate-limit noise).",
+  "rca_of_issue": "Root cause from iteration 11: the count endpoint used raw httpx with no retry/cache while wp_get had retry+cache. On WP cold-start 429s, count returned 0 and the UI fell back to the pre-fix label. Fix in iteration 12: new _wp_get_total() helper with 3-attempt retry (0.8s + 1.6s backoff) covering both 429/503 and 200-with-X-WP-Total=0 hiccup cases, plus 120s cache for successful non-zero totals (30s for zero). Frontend added an additional client-side 1.5s retry as belt-and-suspenders and now renders the post date on each result card. Verified: cold-start returns correct total on the first request across all 5 queries in the review; UI matches the exact expected copy."
+}

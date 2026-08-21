@@ -172,6 +172,12 @@ export const api = {
     return req<WPPost[]>(`/wp/posts?${q.toString()}`);
   },
   post: (id: number) => req<WPPost>(`/wp/posts/${id}`),
+  postsCount: (params: { category?: number; search?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.category) q.set("category", String(params.category));
+    if (params.search) q.set("search", params.search);
+    return req<{ total: number }>(`/wp/posts/count?${q.toString()}`);
+  },
   homeFeed: (params: { stage?: string | null; exclude_ids?: string; interest_cat?: number } = {}) => {
     const q = new URLSearchParams();
     if (params.stage) q.set("stage", params.stage);
