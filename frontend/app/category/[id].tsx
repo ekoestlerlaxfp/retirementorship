@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, StyleSheet, ScrollView, Text, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,20 +6,54 @@ import { router, useLocalSearchParams } from "expo-router";
 import { colors, spacing, radius } from "@/src/theme";
 import { api, cachedApi, WPPost } from "@/src/api/client";
 import { ArticleCard } from "@/src/components/cards";
-import { CenteredLoader, EmptyState, Muted } from "@/src/components/ui";
+import { CenteredLoader, EmptyState } from "@/src/components/ui";
+
+const PER_PAGE = 20;
 
 export default function CategoryScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string; slug: string }>();
   const [posts, setPosts] = useState<WPPost[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
+  // Initial load: cache-first, then a fresh page-1 request that tells us if more exist.
   useEffect(() => {
     if (!id) return;
     cachedApi.category(Number(id), {
       onCache: (d) => { if (d) setPosts(d); },
-      onFresh: (d) => setPosts(d),
+      onFresh: (d) => { setPosts(d); setPage(1); setHasMore(d.length >= PER_PAGE); },
     }).then((d) => { if (d && !posts) setPosts(d); }).catch(() => setPosts([]));
+    // Fresh network fetch with our chosen page size so hasMore is reliable.
+    api.posts({ category: Number(id), per_page: PER_PAGE, page: 1 })
+      .then((d) => {
+        setPosts(d);
+        setPage(1);
+        setHasMore((d?.length || 0) >= PER_PAGE);
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const loadMore = useCallback(async () => {
+    if (!id || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const next = page + 1;
+      const more = await api.posts({ category: Number(id), per_page: PER_PAGE, page: next });
+      setPosts((cur) => {
+        const existing = cur || [];
+        const seen = new Set(existing.map((p) => p.id));
+        return [...existing, ...(more || []).filter((p) => !seen.has(p.id))];
+      });
+      setPage(next);
+      setHasMore((more?.length || 0) >= PER_PAGE);
+    } catch {
+      // keep hasMore so the user can retry
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [id, page, hasMore, loadingMore]);
 
   return (
     <View style={styles.root}>
@@ -46,6 +80,21 @@ export default function CategoryScreen() {
               <ArticleCard post={p} testID={`cat-post-${p.id}`} />
             </View>
           ))}
+          {hasMore ? (
+            <Pressable
+              testID="cat-load-more"
+              onPress={loadMore}
+              disabled={loadingMore}
+              style={({ pressed }) => [styles.loadMore, pressed && { opacity: 0.85 }, loadingMore && { opacity: 0.6 }]}
+            >
+              <Ionicons name={loadingMore ? "hourglass" : "chevron-down"} size={16} color={colors.brandSecondary} />
+              <Text style={styles.loadMoreText}>{loadingMore ? "Loading…" : "Load more articles"}</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.endCap}>
+              <Text style={styles.endCapText}>You&apos;re all caught up · {posts.length} articles</Text>
+            </View>
+          )}
         </ScrollView>
       )}
     </View>
@@ -69,4 +118,20 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     paddingBottom: 120,
   },
+  loadMore: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: spacing.md,
+    paddingVertical: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  loadMoreText: { color: colors.brandSecondary, fontWeight: "700", fontSize: 14 },
+  endCap: { width: "100%", alignItems: "center", paddingTop: spacing.xl, paddingBottom: spacing.md },
+  endCapText: { color: colors.muted, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" },
 });

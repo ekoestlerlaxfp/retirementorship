@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing } from "@/src/theme";
-import { cachedApi, type BookT, type MagazineT, type WPPost } from "@/src/api/client";
+import { cachedApi, api, type BookT, type MagazineT, type WPPost } from "@/src/api/client";
 import { BookCover, MagazineCover } from "@/src/components/BookCover";
 import { H1, Muted, GoldPill } from "@/src/components/ui";
 import { bookProgress, type BookProgress } from "@/src/offline";
@@ -18,6 +18,9 @@ export default function Learn() {
   const [books, setBooks] = useState<BookT[] | null>(null);
   const [mags, setMags] = useState<MagazineT[] | null>(null);
   const [videos, setVideos] = useState<WPPost[] | null>(null);
+  const [videosPage, setVideosPage] = useState(1);
+  const [videosHasMore, setVideosHasMore] = useState(true);
+  const [videosLoadingMore, setVideosLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [bookProg, setBookProg] = useState<Record<string, BookProgress>>({});
 
@@ -39,8 +42,16 @@ export default function Learn() {
     }).then((d) => { if (d && mags === null) setMags(d); }).catch(() => setMags([]));
     cachedApi.videos({
       onCache: (d) => { if (d) setVideos(d); },
-      onFresh: (d) => setVideos(d),
+      onFresh: (d) => { setVideos(d); setVideosPage(1); setVideosHasMore(true); },
     }).then((d) => { if (d && videos === null) setVideos(d); }).catch(() => setVideos([]));
+    // After the cached snapshot paints, ask page 1 with metadata so we know if there are more.
+    api.videosPage(1, 20)
+      .then((res) => {
+        setVideos(res.items);
+        setVideosPage(1);
+        setVideosHasMore(!!res.has_more);
+      })
+      .catch(() => {});
     // Book progress + server sync
     loadProgress();
     bookProgress.syncFromServer().then(() => loadProgress()).catch(() => {});
@@ -50,6 +61,27 @@ export default function Learn() {
 
   useEffect(() => { load(); }, [load]);
   const onRefresh = useCallback(() => { setRefreshing(true); load().finally(() => setRefreshing(false)); }, [load]);
+
+  const loadMoreVideos = useCallback(async () => {
+    if (videosLoadingMore || !videosHasMore) return;
+    setVideosLoadingMore(true);
+    try {
+      const nextPage = videosPage + 1;
+      const res = await api.videosPage(nextPage, 20);
+      setVideos((cur) => {
+        const existing = cur || [];
+        const seen = new Set(existing.map((v) => String(v.id)));
+        const merged = [...existing, ...res.items.filter((v) => !seen.has(String(v.id)))];
+        return merged;
+      });
+      setVideosPage(nextPage);
+      setVideosHasMore(!!res.has_more);
+    } catch {
+      // Keep hasMore so the user can retry
+    } finally {
+      setVideosLoadingMore(false);
+    }
+  }, [videosLoadingMore, videosHasMore, videosPage]);
 
   return (
     <View style={styles.root}>
@@ -100,7 +132,14 @@ export default function Learn() {
       >
         {tab === "books" && <BooksSection books={books} progressMap={bookProg} />}
         {tab === "magazines" && <MagazinesSection mags={mags} />}
-        {tab === "videos" && <VideosSection videos={videos} />}
+        {tab === "videos" && (
+          <VideosSection
+            videos={videos}
+            hasMore={videosHasMore}
+            loadingMore={videosLoadingMore}
+            onLoadMore={loadMoreVideos}
+          />
+        )}
       </ScrollView>
     </View>
   );
@@ -163,7 +202,14 @@ function MagazinesSection({ mags }: { mags: MagazineT[] | null }) {
   );
 }
 
-function VideosSection({ videos }: { videos: WPPost[] | null }) {
+function VideosSection({
+  videos, hasMore, loadingMore, onLoadMore,
+}: {
+  videos: WPPost[] | null;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}) {
   if (!videos) return null;
   if (!videos.length) {
     return <ComingSoon icon="play-circle-outline" title="No videos yet" subtitle="Video lessons will appear here." />;
@@ -199,6 +245,22 @@ function VideosSection({ videos }: { videos: WPPost[] | null }) {
           </View>
         </Pressable>
       ))}
+
+      {hasMore ? (
+        <Pressable
+          testID="learn-videos-load-more"
+          onPress={onLoadMore}
+          disabled={loadingMore}
+          style={({ pressed }) => [styles.loadMoreBtn, pressed && { opacity: 0.85 }, loadingMore && { opacity: 0.6 }]}
+        >
+          <Ionicons name={loadingMore ? "hourglass" : "chevron-down"} size={16} color={colors.brandSecondary} />
+          <Text style={styles.loadMoreText}>{loadingMore ? "Loading…" : "Load more videos"}</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.endCap}>
+          <Text style={styles.endCapText}>You&apos;re all caught up · {videos.length} videos</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -330,6 +392,21 @@ const styles = StyleSheet.create({
   cellSub: { marginTop: 4, fontSize: 13, color: colors.muted, lineHeight: 18 },
   progressMeta: { marginTop: 4, fontSize: 12, color: colors.brandSecondary, fontWeight: "700", letterSpacing: 0.2 },
   videoMeta: { marginTop: 4, fontSize: 13, color: colors.muted, fontWeight: "500" },
+  loadMoreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: spacing.lg,
+    paddingVertical: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  loadMoreText: { color: colors.brandSecondary, fontWeight: "700", fontSize: 14 },
+  endCap: { alignItems: "center", paddingTop: spacing.xl, paddingBottom: spacing.md },
+  endCapText: { color: colors.muted, fontSize: 12, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" },
   comingWrap: {
     alignItems: "center",
     paddingTop: spacing["2xl"],

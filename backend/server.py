@@ -607,7 +607,7 @@ async def wp_posts(
     category: Optional[int] = None,
     search: Optional[str] = None,
 ):
-    params: Dict[str, Any] = {"page": page, "per_page": min(per_page, 20), "_embed": 1}
+    params: Dict[str, Any] = {"page": page, "per_page": min(per_page, 50), "_embed": 1}
     if category:
         params["categories"] = category
     if search:
@@ -1146,17 +1146,59 @@ async def get_magazine(mag_id: str):
 
 
 @api_router.get("/videos")
-async def list_videos(limit: int = 20):
-    # Try a dedicated CPT first
-    items = await _fetch_cpt("video")
-    if items:
-        return items[:limit]
-    # Otherwise synthesize from posts whose content embeds YouTube/Vimeo
-    data = await wp_get("/posts", {"per_page": min(limit, 20), "_embed": 1, "orderby": "date", "order": "desc"})
-    if not isinstance(data, list):
-        data = []
-    all_posts = [transform_post(p) for p in data]
-    return [p for p in all_posts if p["type"] == "video"][:limit]
+async def list_videos(limit: int = 20, page: int = 1):
+    """
+    Videos list, paginated. Returns `{ items, page, has_more }`.
+
+    Two data paths:
+      1. If the WP site has a dedicated `video` CPT, we use it (page-slicing in memory).
+      2. Otherwise we synthesize videos from posts whose content embeds YouTube/Vimeo.
+    """
+    page = max(1, int(page))
+    per_page = max(1, min(int(limit), 50))
+
+    # 1) Dedicated CPT (mocked/synthesized in-memory list)
+    all_from_cpt = await _fetch_cpt("video")
+    if all_from_cpt:
+        start = (page - 1) * per_page
+        end = start + per_page
+        return {
+            "items": all_from_cpt[start:end],
+            "page": page,
+            "has_more": end < len(all_from_cpt),
+        }
+
+    # 2) Filter posts. Because not every post is a video, we may need to look ahead
+    #    a couple of WP pages to fill this page of videos.
+    wp_per_page = 50
+    wp_page = ((page - 1) * per_page) // wp_per_page + 1  # rough starting WP page
+    collected: list[dict] = []
+    wp_has_more = True
+    # Walk WP pages until we've collected enough videos or ran out.
+    while len(collected) < page * per_page and wp_has_more:
+        data = await wp_get("/posts", {
+            "per_page": wp_per_page,
+            "_embed": 1,
+            "orderby": "date",
+            "order": "desc",
+            "page": wp_page,
+        })
+        if not isinstance(data, list) or not data:
+            wp_has_more = False
+            break
+        collected.extend(p for p in (transform_post(x) for x in data) if p["type"] == "video")
+        wp_has_more = len(data) >= wp_per_page
+        wp_page += 1
+        if wp_page > 20:  # safety cap: don't fetch more than 1000 posts
+            break
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    return {
+        "items": collected[start:end],
+        "page": page,
+        "has_more": end < len(collected) or wp_has_more,
+    }
 
 
 class BookProgressIn(BaseModel):

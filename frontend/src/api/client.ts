@@ -203,7 +203,9 @@ export const api = {
   books: () => req<BookT[]>("/books"),
   book: (id: string | number) => req<BookT>(`/books/${id}`),
   magazines: () => req<MagazineT[]>("/magazines"),
-  videos: (limit = 12) => req<WPPost[]>(`/videos?limit=${limit}`),
+  videos: (limit = 12) => req<{ items: WPPost[]; page: number; has_more: boolean }>(`/videos?limit=${limit}`),
+  videosPage: (page: number, per_page = 20) =>
+    req<{ items: WPPost[]; page: number; has_more: boolean }>(`/videos?limit=${per_page}&page=${page}`),
 };
 
 // -------- Cached wrappers (cache-first + background revalidate) --------
@@ -290,7 +292,14 @@ export const cachedApi = {
     return cache.staleWhileRevalidate<MagazineT[]>(K.magazines(), () => api.magazines(), handlers);
   },
   videos(handlers: { onCache?: (d: WPPost[] | null) => void; onFresh?: (d: WPPost[]) => void } = {}) {
-    return cache.staleWhileRevalidate<WPPost[]>(K.videos(), () => api.videos(20), handlers);
+    return cache.staleWhileRevalidate<WPPost[]>(
+      K.videos(),
+      async () => {
+        const res = await api.videos(20);
+        return res.items;
+      },
+      handlers,
+    );
   },
 };
 
