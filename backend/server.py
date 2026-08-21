@@ -1168,14 +1168,15 @@ async def list_videos(limit: int = 20, page: int = 1):
             "has_more": end < len(all_from_cpt),
         }
 
-    # 2) Filter posts. Because not every post is a video, we may need to look ahead
-    #    a couple of WP pages to fill this page of videos.
+    # 2) Filter posts. Because not every post is a video, we walk WP pages
+    #    from the start each request and accumulate video posts until we have
+    #    enough to serve the requested slice.
     wp_per_page = 50
-    wp_page = ((page - 1) * per_page) // wp_per_page + 1  # rough starting WP page
+    wp_page = 1
     collected: list[dict] = []
     wp_has_more = True
-    # Walk WP pages until we've collected enough videos or ran out.
-    while len(collected) < page * per_page and wp_has_more:
+    end = page * per_page
+    while len(collected) < end and wp_has_more:
         data = await wp_get("/posts", {
             "per_page": wp_per_page,
             "_embed": 1,
@@ -1189,11 +1190,10 @@ async def list_videos(limit: int = 20, page: int = 1):
         collected.extend(p for p in (transform_post(x) for x in data) if p["type"] == "video")
         wp_has_more = len(data) >= wp_per_page
         wp_page += 1
-        if wp_page > 20:  # safety cap: don't fetch more than 1000 posts
+        if wp_page > 30:  # safety cap: don't fetch more than 1,500 posts
             break
 
     start = (page - 1) * per_page
-    end = start + per_page
     return {
         "items": collected[start:end],
         "page": page,
