@@ -73,6 +73,8 @@ export function VideoPlayer({ videoId, kind = "youtube", height = 220, width, te
           androidLayerType: "hardware",
           originWhitelist: ["*"],
           userAgent: MOBILE_UA,
+          useLocalHTML: true,
+          baseUrlOverride: "https://www.youtube.com",
         }}
         initialPlayerParams={{
           modestbranding: true,
