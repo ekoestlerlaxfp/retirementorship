@@ -1,0 +1,55 @@
+{
+  "summary": "Backend video_id/video_kind extraction is FULLY VERIFIED — all 11 pytest tests pass (video list, /wp/posts/16163 returns exactly video_id='pNxobWWrWys' + video_kind='youtube', non-video posts have null fields, and _extract_video() handles all 5 documented URL shapes: youtube.com/embed/, youtu.be/, youtube.com/watch?v=, youtube-nocookie.com/embed/, player.vimeo.com/video/). However, the frontend web preview is now COMPLETELY BROKEN by this same fix — Metro fails to bundle the web build because src/components/VideoPlayer.tsx does `require('react-native-youtube-iframe')` inside a runtime `Platform.OS !== 'web'` branch, but Metro statically walks all require() calls at bundle time. On web, react-native-youtube-iframe resolves to its WebView.web.js which imports 'react-native-web-webview' (NOT installed). Result: /node_modules/expo-router/entry.bundle returns HTTP 500, every route renders as a blank white page, and the entire app is unusable on web (including the Videos-tab → tap-card flow the review explicitly asked to verify). Bundle error confirmed in /var/log/supervisor/expo.out.log: `Unable to resolve \"react-native-web-webview\" from \"node_modules/react-native-youtube-iframe/lib/commonjs/WebView.web.js\"`.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "VideoPlayer.tsx / expo-router web bundle",
+        "issue": "Web bundle fails with 500 — `Unable to resolve 'react-native-web-webview' from node_modules/react-native-youtube-iframe/lib/commonjs/WebView.web.js`. Even though the require() lives inside a `Platform.OS === 'web'`-negative branch, Metro's static resolver still walks the require and pulls in the youtube-iframe web variant, which depends on the non-installed react-native-web-webview shim. Every route on wisdom-edge.preview.emergentagent.com returns a blank page. Reference: /app/frontend/src/components/VideoPlayer.tsx:61",
+        "testID": "n/a (bundle never loads)",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Learn → Videos tab → tap video → article screen → YouTube iframe",
+        "issue": "UNVERIFIABLE — web bundle 500 prevents any route from loading. Confirmed both /learn and /article/16163 render as empty <div id=root> with no React tree. Backend returns the correct video_id, but the frontend never mounts VideoPlayer to consume it.",
+        "affected_testIDs": ["article-video", "article-title", "video-card-16163"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "react-native-youtube-iframe (via VideoPlayer.tsx)",
+        "issue": "Metro require() inside Platform branch is not tree-shaken — needs a platform-specific file split (VideoPlayer.web.tsx + VideoPlayer.native.tsx or VideoPlayer.tsx + VideoPlayer.native.tsx) so the web bundler never resolves the native-only youtube-iframe module. Reference: /app/frontend/src/components/VideoPlayer.tsx:61"
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13_video_id.py",
+    "/app/test_reports/pytest/iteration13_results.xml"
+  ],
+  "action_items": [
+    "FIX WEB BUNDLE (blocker): Split VideoPlayer into platform-specific files. Option A (recommended): create /app/frontend/src/components/VideoPlayer.web.tsx (contains only the iframe branch, no require of react-native-youtube-iframe) and rename the current file to VideoPlayer.native.tsx (contains only the native branch). Metro will auto-select by platform. Option B: install `react-native-web-webview` as a dependency so youtube-iframe's WebView.web.js resolves — but this pulls extra weight into the web bundle and doesn't fix the fact that react-native-youtube-iframe's web variant is a lower-fidelity player than the plain iframe you already have.",
+    "After fixing the bundle, re-verify: (1) /learn loads without console errors, (2) Videos tab renders cards, (3) tapping the id=16163 card navigates to /article/16163, (4) an <iframe src=\"https://www.youtube-nocookie.com/embed/pNxobWWrWys?...\"> is present in the DOM, (5) clicking play in the iframe starts playback.",
+    "Not blocking, but worth cleaning: article/[id].tsx still imports `WebView from 'react-native-webview'` (line 8) and `CrossWebView` (line 14) even though neither is used after the VideoPlayer switch. Dead imports."
+  ],
+  "critical_code_review_comments": [
+    "server.py _extract_video() (lines 90-112) is clean, well-scoped, and handles all 5 URL shapes correctly (verified by parameterized tests). Good.",
+    "The Platform.OS conditional in VideoPlayer.tsx is a common but risky pattern — Metro does not honor it as a static tree-shake. The idiomatic fix is a .web/.native file split. Using `require()` inside an `if` block is misleading; readers assume it's lazy but Metro resolves it at bundle time.",
+    "article/[id].tsx has ~7 lines of unused imports after this refactor (WebView, CrossWebView). Should be pruned once the VideoPlayer split lands.",
+    "The client-side extractYoutubeId/extractVimeoId fallback in article/[id].tsx duplicates the server logic — since the backend now always returns video_id/video_kind, the client fallback is dead code for any post fetched via the API. Fine as a defensive belt, but flag it as future cleanup."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration13_video_id.py (new — 11 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "0% (web bundle 500, cannot load any route)"},
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend is done — /api/videos, /api/wp/posts/16163, and non-video sanity all verified. If main agent applies the platform-split fix, re-run: `pytest /app/backend/tests/test_iteration13_video_id.py -v -o addopts=''` (should stay 11/11), then hit https://wisdom-edge.preview.emergentagent.com/article/16163 in a mobile viewport (390x844) and confirm an iframe with src containing 'youtube-nocookie.com/embed/pNxobWWrWys' is in the DOM. To confirm the bundle is healthy first, `curl -o /dev/null -w '%{http_code}' 'https://wisdom-edge.preview.emergentagent.com/node_modules/expo-router/entry.bundle?platform=web'` should return 200, not 500. Do NOT try to test on web until that curl returns 200.",
+  "rca_of_issue": "Root cause of the frontend regression: React Native's Metro bundler resolves require() calls at bundle time, not runtime. Wrapping `require('react-native-youtube-iframe')` in `if (Platform.OS !== 'web')` does NOT prevent Metro from resolving the module for the web bundle. Metro walks every require() reachable in the module graph and tries to resolve it for the target platform. On web, react-native-youtube-iframe resolves to its `WebView.web.js` file which does `require('react-native-web-webview')` — a package that isn't in package.json and isn't in node_modules. Metro fails the whole bundle with a 500. Reproduction: `curl -o /dev/null -w '%{http_code}' 'https://wisdom-edge.preview.emergentagent.com/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app'` → 500. Mitigation (recommended): rename VideoPlayer.tsx → VideoPlayer.native.tsx (keeps only the native YouTube iframe code) and create a new VideoPlayer.tsx (or VideoPlayer.web.tsx) that contains ONLY the <iframe> branch and does not require the youtube-iframe package at all. Metro's platform-file resolution will select VideoPlayer.web.tsx (or fall through to VideoPlayer.tsx) on web builds and VideoPlayer.native.tsx on iOS/Android/Expo Go. This is a two-file, zero-behavior-change split. Not done here because it changes source-tree layout, which is main-agent territory."
+}

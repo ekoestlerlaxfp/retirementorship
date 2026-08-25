@@ -1,0 +1,20 @@
+{
+  "summary": "Smoke test regression check after removing dead CrossWebView import from article/[id].tsx. All 4 checks pass: (1) http://localhost:3000/ returns HTTP 200, (2) /article/16163 loads with zero console errors and renders iframe with src 'https://www.youtube-nocookie.com/embed/pNxobWWrWys?playsinline=1&modestbranding=1&rel=0', (3) backend /api/wp/posts/16163 returns video_id='pNxobWWrWys' and video_kind='youtube', (4) ESLint on article/[id].tsx reports no issues (no unused CrossWebView warning).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "YouTube video playback fix is fully verified. Article 16163 renders iframe with youtube-nocookie embed URL correctly. No unused-import lint warnings.",
+  "rca_of_issue": "N/A - smoke test confirming no regression after dead-import cleanup."
+}

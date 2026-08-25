@@ -11,7 +11,7 @@ import { colors, spacing, radius, type as typo } from "@/src/theme";
 import { api, cachedApi, WPPost } from "@/src/api/client";
 import { CenteredLoader, CompletePill, GoldPill, Muted } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
-import { CrossWebView } from "@/src/components/CrossWebView";
+import { VideoPlayer } from "@/src/components/VideoPlayer";
 import { useAuth } from "@/src/context/auth";
 import { progress as progressStore, downloads, useCompleted } from "@/src/offline";
 
@@ -22,7 +22,14 @@ function extractYoutubeId(html: string): string | null {
   if (m2) return m2[1];
   const m3 = html.match(/youtube\.com\/watch\?v=([A-Za-z0-9_-]{6,})/);
   if (m3) return m3[1];
+  const m4 = html.match(/youtube-nocookie\.com\/embed\/([A-Za-z0-9_-]{6,})/);
+  if (m4) return m4[1];
   return null;
+}
+
+function extractVimeoId(html: string): string | null {
+  const m = html.match(/player\.vimeo\.com\/video\/(\d+)/);
+  return m ? m[1] : null;
 }
 
 export default function ArticleScreen() {
@@ -66,7 +73,20 @@ export default function ArticleScreen() {
     });
   }, [id, user]);
 
-  const youtubeId = useMemo(() => post ? extractYoutubeId(post.content_html) : null, [post]);
+  const videoInfo = useMemo(() => {
+    if (!post) return null as null | { kind: "youtube" | "vimeo"; id: string };
+    // Prefer backend-provided fields (more robust extraction, done once server-side).
+    if (post.video_id && post.video_kind) {
+      return { kind: post.video_kind, id: post.video_id };
+    }
+    // Fallback to client-side extraction from content HTML.
+    const yt = extractYoutubeId(post.content_html || "");
+    if (yt) return { kind: "youtube" as const, id: yt };
+    const vm = extractVimeoId(post.content_html || "");
+    if (vm) return { kind: "vimeo" as const, id: vm };
+    return null;
+  }, [post]);
+  const youtubeId = videoInfo?.kind === "youtube" ? videoInfo.id : null;
 
   const toggleBookmark = useCallback(async () => {
     if (!post) return;
@@ -205,13 +225,13 @@ export default function ArticleScreen() {
         onScroll={onScroll}
         scrollEventThrottle={200}
       >
-        {youtubeId ? (
+        {videoInfo ? (
           <View style={[styles.videoWrap, { marginTop: insets.top + 72 }]}>
-            <CrossWebView
+            <VideoPlayer
               testID="article-video"
-              uri={`https://www.youtube.com/embed/${youtubeId}?playsinline=1&modestbranding=1&rel=0`}
-              allowFullscreen
-              style={styles.video as any}
+              videoId={videoInfo.id}
+              kind={videoInfo.kind}
+              height={Math.round(width * 9 / 16)}
             />
           </View>
         ) : post.image ? (

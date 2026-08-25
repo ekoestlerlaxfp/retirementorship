@@ -87,6 +87,31 @@ def strip_html(s: str) -> str:
     return _html.unescape(text).replace("\u00a0", " ").strip()
 
 
+import re as _re
+
+_YT_PATTERNS = (
+    _re.compile(r"youtube\.com/embed/([A-Za-z0-9_-]{6,})", _re.IGNORECASE),
+    _re.compile(r"youtu\.be/([A-Za-z0-9_-]{6,})", _re.IGNORECASE),
+    _re.compile(r"youtube\.com/watch\?[^\"'\s]*[?&]?v=([A-Za-z0-9_-]{6,})", _re.IGNORECASE),
+    _re.compile(r"youtube-nocookie\.com/embed/([A-Za-z0-9_-]{6,})", _re.IGNORECASE),
+)
+_VIMEO_RE = _re.compile(r"player\.vimeo\.com/video/(\d+)", _re.IGNORECASE)
+
+
+def _extract_video(content_html: str) -> tuple[Optional[str], Optional[str]]:
+    """Return (kind, id) from the WP content HTML. Kind is 'youtube' or 'vimeo'."""
+    if not content_html:
+        return (None, None)
+    for pat in _YT_PATTERNS:
+        m = pat.search(content_html)
+        if m:
+            return ("youtube", m.group(1))
+    m = _VIMEO_RE.search(content_html)
+    if m:
+        return ("vimeo", m.group(1))
+    return (None, None)
+
+
 def transform_post(p: dict) -> dict:
     embedded = p.get("_embedded", {}) or {}
     featured = (embedded.get("wp:featuredmedia") or [{}])[0] or {}
@@ -105,13 +130,8 @@ def transform_post(p: dict) -> dict:
     content_html = (p.get("content") or {}).get("rendered", "")
     words = len(strip_html(content_html).split()) if content_html else 0
     reading_time = max(1, round(words / 220))
-    # Detect if the content is primarily a video (has iframe/youtube) → mark type video
-    is_video = bool(content_html) and (
-        "youtube.com/embed" in content_html
-        or "youtu.be/" in content_html
-        or "player.vimeo" in content_html
-        or "wp-block-embed-youtube" in content_html
-    )
+    video_kind, video_id = _extract_video(content_html)
+    is_video = video_kind is not None
     return {
         "id": p.get("id"),
         "slug": p.get("slug"),
@@ -127,6 +147,8 @@ def transform_post(p: dict) -> dict:
         "author": {"name": author.get("name"), "avatar": (author.get("avatar_urls") or {}).get("96")},
         "reading_time": reading_time,
         "type": "video" if is_video else "article",
+        "video_kind": video_kind,
+        "video_id": video_id,
     }
 
 

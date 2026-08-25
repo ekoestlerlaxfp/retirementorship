@@ -19,6 +19,8 @@ export type WPPost = {
   author?: { name?: string; avatar?: string } | null;
   reading_time: number;
   type: "article" | "video";
+  video_id?: string | null;
+  video_kind?: "youtube" | "vimeo" | null;
 };
 
 export type HomeFeed = {
