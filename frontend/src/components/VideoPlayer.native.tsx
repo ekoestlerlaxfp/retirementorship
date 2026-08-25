@@ -1,19 +1,22 @@
 // Native (iOS/Android/Expo Go) YouTube + Vimeo player.
 //
-// Uses a plain `react-native-webview` loading local HTML that embeds the
-// youtube-nocookie.com iframe. This is intentionally simpler than the
-// react-native-youtube-iframe library because:
-//  - We control the `baseUrl`, so YouTube sees a stable trusted origin
-//    instead of `about:blank` (which triggers the "verify you're a human"
-//    consent screen on some devices/regions).
-//  - youtube-nocookie.com does not require the EU cookie/consent flow —
-//    videos start immediately on tap with no interstitial.
-//  - Cross-platform prop shape matches the web variant of VideoPlayer.
+// Uses `react-native-youtube-iframe`, which wraps YouTube's official IFrame
+// Player API in a react-native-webview. This is the officially recommended
+// approach for Expo apps because it uses YouTube's own JavaScript API rather
+// than a raw embed URL — so it doesn't trigger the web-based bot verification
+// / cookie consent screens users see when opening an embed URL directly.
+//
+// Anti-bot config that is critical:
+//  - `originWhitelist: ["*"]` on the WebView, plus a modern mobile user agent
+//  - `mediaPlaybackRequiresUserAction: false` so tapping play works first try
+//  - `androidLayerType: "hardware"` for smooth Android playback
+//  - `initialPlayerParams` with `modestbranding` + `rel: false` + `controls: true`
 
-import React from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, StyleSheet, ActivityIndicator } from "react-native";
+import YoutubePlayer from "react-native-youtube-iframe";
 import { WebView } from "react-native-webview";
-import { radius } from "../theme";
+import { colors, radius } from "../theme";
 
 type Props = {
   videoId: string;
@@ -24,87 +27,62 @@ type Props = {
   autoplay?: boolean;
 };
 
-// A trusted origin YouTube already knows — no consent interstitial.
-const EMBED_ORIGIN = "https://retirementorship.com";
-
-function youtubeHtml(videoId: string, autoplay: boolean) {
-  const src =
-    `https://www.youtube-nocookie.com/embed/${videoId}` +
-    `?playsinline=1&modestbranding=1&rel=0&fs=1&iv_load_policy=3` +
-    `&cc_load_policy=0&autoplay=${autoplay ? 1 : 0}&origin=${encodeURIComponent(EMBED_ORIGIN)}`;
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-    <style>
-      html, body { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100%; }
-      .wrap { position: absolute; inset: 0; }
-      iframe { width: 100%; height: 100%; border: 0; display: block; }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <iframe
-        src="${src}"
-        title="YouTube video player"
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen; accelerometer; gyroscope"
-        allowfullscreen
-        referrerpolicy="strict-origin-when-cross-origin"
-      ></iframe>
-    </div>
-  </body>
-</html>`;
-}
-
-function vimeoHtml(videoId: string, autoplay: boolean) {
-  const src =
-    `https://player.vimeo.com/video/${videoId}` +
-    `?playsinline=1&autoplay=${autoplay ? 1 : 0}&dnt=1`;
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-    <style>
-      html, body { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
-      iframe { width: 100%; height: 100%; border: 0; display: block; }
-    </style>
-  </head>
-  <body>
-    <iframe
-      src="${src}"
-      title="Vimeo video player"
-      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-      allowfullscreen
-      referrerpolicy="strict-origin-when-cross-origin"
-    ></iframe>
-  </body>
-</html>`;
-}
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1";
 
 export function VideoPlayer({ videoId, kind = "youtube", height = 220, width, testID, autoplay = false }: Props) {
-  const html = kind === "vimeo" ? vimeoHtml(videoId, autoplay) : youtubeHtml(videoId, autoplay);
+  const [ready, setReady] = useState(false);
+  const containerStyle = [styles.wrap, { height, width: width || "100%" }];
+
+  if (kind === "vimeo") {
+    return (
+      <View style={containerStyle} testID={testID}>
+        <WebView
+          source={{ uri: `https://player.vimeo.com/video/${videoId}?playsinline=1&dnt=1` }}
+          allowsFullscreenVideo
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          javaScriptEnabled
+          domStorageEnabled
+          userAgent={MOBILE_UA}
+          style={{ height, width: "100%", backgroundColor: "#000" }}
+        />
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.wrap, { height, width: width || "100%" }]} testID={testID}>
-      <WebView
-        // Setting baseUrl to a real trusted domain stops YouTube from showing
-        // the "verify you're human" / consent iframe when origin is about:blank.
-        source={{ html, baseUrl: EMBED_ORIGIN }}
-        originWhitelist={["*"]}
-        allowsFullscreenVideo
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled
-        domStorageEnabled
-        thirdPartyCookiesEnabled
-        setSupportMultipleWindows={false}
-        androidLayerType="hardware"
-        userAgent={
-          // A modern mobile UA prevents the "outdated browser / bot" prompts.
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
-        }
-        style={styles.webview}
+    <View style={containerStyle} testID={testID}>
+      {!ready ? (
+        <View style={styles.loader}>
+          <ActivityIndicator color={colors.brandPrimary} />
+        </View>
+      ) : null}
+      <YoutubePlayer
+        height={height}
+        videoId={videoId}
+        play={autoplay}
+        onReady={() => setReady(true)}
+        webViewProps={{
+          allowsFullscreenVideo: true,
+          allowsInlineMediaPlayback: true,
+          mediaPlaybackRequiresUserAction: false,
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          thirdPartyCookiesEnabled: true,
+          androidLayerType: "hardware",
+          originWhitelist: ["*"],
+          userAgent: MOBILE_UA,
+        }}
+        initialPlayerParams={{
+          modestbranding: true,
+          rel: false,
+          preventFullScreen: false,
+          controls: true,
+          cc_lang_pref: "en",
+          iv_load_policy: 3,
+          playsinline: true,
+        }}
       />
     </View>
   );
@@ -116,8 +94,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#000",
   },
-  webview: {
-    flex: 1,
-    backgroundColor: "#000",
+  loader: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
   },
 });
