@@ -39,7 +39,12 @@ export default function Onboarding() {
     }
   };
 
-  const onSkip = () => router.replace("/(tabs)");
+  const onSkip = async () => {
+    // Persist a sentinel so we don't ask the user again on every launch.
+    // We use "skipped" (not empty) so `!!stage` in index.tsx passes.
+    try { await AsyncStorage.setItem(STAGE_KEY, "skipped"); } catch {}
+    router.replace("/(tabs)");
+  };
 
   return (
     <View style={styles.root}>
