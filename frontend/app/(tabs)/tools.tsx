@@ -1,7 +1,7 @@
 import React from "react";
 import { View, StyleSheet, ScrollView, Text, Pressable, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing, radius, shadow } from "@/src/theme";
 import { H1, Muted, GoldPill } from "@/src/components/ui";

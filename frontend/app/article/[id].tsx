@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Text, Pressable, useWindowDimensions, Sha
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { router, useLocalSearchParams } from "expo-router";
 import WebView from "react-native-webview";
 import RenderHtml from "react-native-render-html";

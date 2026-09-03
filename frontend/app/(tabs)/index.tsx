@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, spacing, radius, stages, BRAND, shadow } from "@/src/theme";
 import { api, cachedApi, type HomeFeed, type BookT, type MagazineT } from "@/src/api/client";
 import { HeroCard, ArticleCard, TrendingCard, TipCard, Rail } from "@/src/components/cards";

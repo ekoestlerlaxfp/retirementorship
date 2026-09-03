@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, spacing, radius, stages, BRAND } from "@/src/theme";
 import { useAuth } from "@/src/context/auth";
@@ -26,7 +26,7 @@ export default function Profile() {
         : (user.name || user.email))
     : "Guest";
 
-  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; testID: string }[] = [
+  const rows: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; onPress: () => void; testID: string }[] = [
     { icon: "bookmark-outline", label: "My bookmarks", onPress: () => router.push("/(tabs)/library"), testID: "profile-bookmarks" },
     { icon: "time-outline", label: "Reading history", onPress: () => router.push("/(tabs)/library"), testID: "profile-history" },
     { icon: "cloud-download-outline", label: "Downloads & storage", onPress: () => router.push("/downloads"), testID: "profile-downloads" },

@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { colors, radius, shadow, spacing, type as typo } from "../theme";
 
@@ -36,7 +36,7 @@ export const PrimaryButton = ({
   label: string;
   onPress: () => void;
   testID?: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
   loading?: boolean;
   disabled?: boolean;
 }) => (
@@ -68,7 +68,7 @@ export const SecondaryButton = ({
   label: string;
   onPress: () => void;
   testID?: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
 }) => (
   <Pressable testID={testID} onPress={onPress} style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.7 }]}>
     {icon && <Ionicons name={icon} size={18} color={colors.brandSecondary} style={{ marginRight: spacing.sm }} />}
@@ -95,7 +95,7 @@ export const EmptyState = ({
   subtitle,
   testID,
 }: {
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
   title: string;
   subtitle?: string;
   testID?: string;

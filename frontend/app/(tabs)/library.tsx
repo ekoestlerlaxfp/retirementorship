@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Text, Pressable, RefreshControl } from "r
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api/client";
 import { H1, Muted, EmptyState, PrimaryButton, SecondaryButton, CompletePill } from "@/src/components/ui";

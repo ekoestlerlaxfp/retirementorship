@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { router } from "expo-router";
 import { colors, radius, shadow, spacing, type as typo } from "../theme";
 import type { WPPost } from "../api/client";

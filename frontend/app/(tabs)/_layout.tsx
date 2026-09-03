@@ -1,6 +1,6 @@
 import React from "react";
 import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { Platform, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,7 +39,7 @@ const iconCenter: any = {
   marginBottom: -14, // reclaim label placeholder space
 };
 
-function TabIcon({ name, color, size = 24 }: { name: keyof typeof Ionicons.glyphMap; color: string; size?: number }) {
+function TabIcon({ name, color, size = 24 }: { name: React.ComponentProps<typeof Ionicons>["name"]; color: string; size?: number }) {
   return (
     <View style={iconCenter}>
       <Ionicons name={name} size={size} color={color} />

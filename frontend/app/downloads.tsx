@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, StyleSheet, ScrollView, Text, Pressable, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, spacing, radius } from "@/src/theme";
 import { H1, Muted, EmptyState, SecondaryButton } from "@/src/components/ui";
 import { downloads, DownloadItem, formatBytes, cache, cacheSize, progress as progressStore } from "@/src/offline";
@@ -142,7 +142,7 @@ export default function DownloadsScreen() {
   );
 }
 
-function iconForKind(k: string): keyof typeof Ionicons.glyphMap {
+function iconForKind(k: string): React.ComponentProps<typeof Ionicons>["name"] {
   switch (k) {
     case "book": return "book-outline";
     case "magazine": return "newspaper-outline";

@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, shadow, spacing } from "@/src/theme";
 import { cachedApi, api, type BookT, type MagazineT, type WPPost, type CourseT } from "@/src/api/client";
 import { BookCover, MagazineCover } from "@/src/components/BookCover";
@@ -111,7 +111,7 @@ export default function Learn() {
             { id: "courses", label: "Courses", icon: "school" as const, count: courses?.length ?? 0 },
             { id: "magazines", label: "Magazines", icon: "newspaper" as const, count: mags?.length ?? 0 },
             { id: "videos", label: "Videos", icon: "play-circle" as const, count: videos?.length ?? 0 },
-          ] as { id: Section; label: string; icon: keyof typeof Ionicons.glyphMap; count: number }[]).map((t) => {
+          ] as { id: Section; label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; count: number }[]).map((t) => {
             const active = tab === t.id;
             return (
               <Pressable
@@ -390,7 +390,7 @@ function VideosSection({
   );
 }
 
-function ComingSoon({ icon, title, subtitle }: { icon: keyof typeof Ionicons.glyphMap; title: string; subtitle?: string }) {
+function ComingSoon({ icon, title, subtitle }: { icon: React.ComponentProps<typeof Ionicons>["name"]; title: string; subtitle?: string }) {
   return (
     <View style={styles.comingWrap}>
       <View style={styles.comingIcon}>

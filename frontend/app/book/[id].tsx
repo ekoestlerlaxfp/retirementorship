@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, shadow, spacing, type as typo, CALENDLY_URL } from "@/src/theme";
 import { api, cachedApi, type BookT } from "@/src/api/client";
 import { BookCover } from "@/src/components/BookCover";
