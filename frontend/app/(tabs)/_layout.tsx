@@ -48,9 +48,9 @@ function TabBg() {
   );
 }
 
-// Centered icon wrapper. Under expo-router 6 (SDK 54, RN Navigation v6) the
-// tab item still reserved label space even with `tabBarShowLabel: false`.
-// Under expo-router 7 (SDK 57, RN Navigation v7) that placeholder is gone.
+// Centered icon wrapper. Under expo-router 7 (SDK 57, RN Navigation v7)
+// the tab item needs `height: '100%'` + explicit iconStyle to reliably
+// center icons when labels are hidden.
 const iconCenter: any = {
   flex: 1,
   alignItems: "center",
@@ -76,11 +76,19 @@ export default function TabsLayout() {
         tabBarShowLabel: false,
         tabBarLabelStyle: { display: "none" },
         tabBarItemStyle: {
+          height: "100%",
           paddingVertical: 0,
           paddingTop: 0,
           paddingBottom: 0,
+          margin: 0,
           alignItems: "center",
           justifyContent: "center",
+        },
+        tabBarIconStyle: {
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 0,
         },
         tabBarStyle: {
           position: "absolute",
@@ -90,6 +98,7 @@ export default function TabsLayout() {
           borderTopWidth: 0,
           borderRadius: 28,
           height: 52,
+          paddingVertical: 0,
           paddingTop: 0,
           paddingBottom: 0,
           paddingHorizontal: 8,
