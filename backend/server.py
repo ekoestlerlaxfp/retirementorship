@@ -969,7 +969,7 @@ BOOK_FALLBACK: List[dict] = [
         "hero_image": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/hmnk2et2_3D%20Retirement%20Income%20Background.webp",
         "excerpt": "Learn the three dimensions of a resilient retirement paycheck: income that outpaces inflation, outlives you, and outperforms the rest. Practical, plain-English strategies to keep you in control.",
         "content_html": "",
-        "pdf_url": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/8q5zu4tl_3D%20Retirement%20Income%201.5.pdf",
         "type": "book",
     },
     {
