@@ -31,7 +31,13 @@ Sub-tagline: **"Your mentor to and through retirement."**
 Rendered: Hero · Today's Tip · Books · Continue Reading · Watch & Learn · Trending · Magazines · Advisor CTA · Recommended.
 
 ## Learn tab
-Chip sections: **Bookshelf**, **Magazines**, **Videos**. Bookshelf renders each book with its current progress bar and page count.
+Chip sections: **Bookshelf**, **Courses**, **Magazines**, **Videos**. Bookshelf renders each book with its current progress bar and page count.
+
+### Courses (WP tag-driven)
+- Every WordPress tag with **≥ 2 published posts** becomes a Course automatically. Ordered chronologically by the earliest lesson.
+- Backend: `GET /api/courses` (list w/ `lesson_ids` for progress) · `GET /api/courses/{tag_id}` (detail w/ full lessons, ordered oldest→newest).
+- Frontend: `Learn → Courses` chip renders each course card with cover, description, lesson count, and a live progress bar tied to `useCompleted()` global state.
+- **Course detail** `/course/[id]`: hero + progress bar + chronological lesson list (numbered), each with thumb / duration / type · "mark complete" checkbox inline · bookmark support (`course-{tag_id}`) · tap opens the article/video reader.
 
 ## Tools
 Compound Interest, Social Security Taxability, Mortgage.

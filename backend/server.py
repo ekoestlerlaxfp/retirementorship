@@ -1223,6 +1223,88 @@ async def get_magazine(mag_id: str):
     raise HTTPException(status_code=404, detail="Magazine not found")
 
 
+async def _course_lessons(tag_id: int) -> list[dict]:
+    """Return all posts tagged with `tag_id`, oldest first (chronological course order)."""
+    lessons: list[dict] = []
+    page = 1
+    while page <= 20:  # safety cap
+        data = await wp_get("/posts", {
+            "tags": tag_id, "per_page": 50, "_embed": 1,
+            "orderby": "date", "order": "asc", "page": page,
+        })
+        if not isinstance(data, list) or not data:
+            break
+        lessons.extend(transform_post(p) for p in data)
+        if len(data) < 50:
+            break
+        page += 1
+    return lessons
+
+
+@api_router.get("/courses")
+async def list_courses():
+    """Every WP tag with 2+ posts becomes a Course. Sorted by the date of the
+    earliest lesson (chronological — oldest course lands first)."""
+    tags = await wp_get("/tags", {"per_page": 100, "orderby": "count", "order": "desc", "hide_empty": True})
+    if not isinstance(tags, list):
+        return []
+    out: list[dict] = []
+    for t in tags:
+        count = int(t.get("count") or 0)
+        if count < 2:
+            continue
+        # Fetch enough lesson stubs to compute progress and pick the earliest.
+        # Bounded to 100 for perf; that covers most WP tags in practice.
+        stubs = await wp_get("/posts", {
+            "tags": t["id"], "per_page": 100, "_embed": 1, "orderby": "date", "order": "asc",
+        })
+        lesson_ids: list[str] = []
+        first = None
+        if isinstance(stubs, list) and stubs:
+            first = transform_post(stubs[0])
+            for p in stubs:
+                try:
+                    lesson_ids.append(str(p.get("id")))
+                except Exception:
+                    pass
+        # If the tag has fewer than 2 *visible* posts, skip — protects against orphaned
+        # counts (private / drafted / restricted posts still count in WP).
+        if len(lesson_ids) < 2:
+            continue
+        out.append({
+            "id": f"course-{t['id']}",
+            "tag_id": t["id"],
+            "slug": t["slug"],
+            "title": _html.unescape(t.get("name") or ""),
+            "description": _html.unescape((t.get("description") or "")).strip(),
+            "lesson_count": len(lesson_ids),
+            "lesson_ids": lesson_ids,
+            "image": (first or {}).get("image"),
+            "started_at": (first or {}).get("date"),
+        })
+    out.sort(key=lambda c: c.get("started_at") or "9999")
+    return out
+
+
+@api_router.get("/courses/{tag_id}")
+async def get_course(tag_id: int):
+    tag = await wp_get(f"/tags/{tag_id}")
+    if not isinstance(tag, dict) or not tag.get("id"):
+        raise HTTPException(status_code=404, detail="Course not found")
+    lessons = await _course_lessons(tag_id)
+    return {
+        "id": f"course-{tag['id']}",
+        "tag_id": tag["id"],
+        "slug": tag.get("slug"),
+        "title": _html.unescape(tag.get("name") or ""),
+        "description": _html.unescape((tag.get("description") or "")).strip(),
+        "lesson_count": len(lessons),
+        "image": (lessons[0].get("image") if lessons else None),
+        "lessons": lessons,
+    }
+
+
+
 @api_router.get("/videos")
 async def list_videos(limit: int = 20, page: int = 1):
     """

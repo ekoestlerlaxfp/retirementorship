@@ -4,6 +4,19 @@ import { Platform } from "react-native";
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 const TOKEN_KEY = "rm_session_token";
 
+export type CourseT = {
+  id: string;               // "course-<tag_id>"
+  tag_id: number;
+  slug: string;
+  title: string;
+  description?: string;
+  lesson_count: number;
+  lesson_ids?: string[];    // present on list response
+  image?: string | null;
+  started_at?: string | null;
+  lessons?: WPPost[];       // present on detail response
+};
+
 export type WPPost = {
   id: number;
   slug: string;
@@ -211,6 +224,8 @@ export const api = {
   books: () => req<BookT[]>("/books"),
   book: (id: string | number) => req<BookT>(`/books/${id}`),
   magazines: () => req<MagazineT[]>("/magazines"),
+  courses: () => req<CourseT[]>("/courses"),
+  course: (tag_id: number) => req<CourseT>(`/courses/${tag_id}`),
   videos: (limit = 12) => req<{ items: WPPost[]; page: number; has_more: boolean }>(`/videos?limit=${limit}`),
   videosPage: (page: number, per_page = 20) =>
     req<{ items: WPPost[]; page: number; has_more: boolean }>(`/videos?limit=${per_page}&page=${page}`),

@@ -6,23 +6,28 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, shadow, spacing } from "@/src/theme";
-import { cachedApi, api, type BookT, type MagazineT, type WPPost } from "@/src/api/client";
+import { cachedApi, api, type BookT, type MagazineT, type WPPost, type CourseT } from "@/src/api/client";
 import { BookCover, MagazineCover } from "@/src/components/BookCover";
 import { H1, Muted, GoldPill } from "@/src/components/ui";
-import { bookProgress, type BookProgress } from "@/src/offline";
+import { bookProgress, type BookProgress, completedStore } from "@/src/offline";
 
-type Section = "books" | "magazines" | "videos";
+type Section = "books" | "magazines" | "videos" | "courses";
 
 export default function Learn() {
   const [tab, setTab] = useState<Section>("books");
   const [books, setBooks] = useState<BookT[] | null>(null);
   const [mags, setMags] = useState<MagazineT[] | null>(null);
   const [videos, setVideos] = useState<WPPost[] | null>(null);
+  const [courses, setCourses] = useState<CourseT[] | null>(null);
   const [videosPage, setVideosPage] = useState(1);
   const [videosHasMore, setVideosHasMore] = useState(true);
   const [videosLoadingMore, setVideosLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [bookProg, setBookProg] = useState<Record<string, BookProgress>>({});
+  const [completedIds, setCompletedIds] = useState<Set<string>>(() => completedStore.get());
+
+  // Keep completed pill / progress bars in sync globally.
+  useEffect(() => completedStore.subscribe(setCompletedIds), []);
 
   const loadProgress = useCallback(async () => {
     const list = await bookProgress.list();
@@ -52,6 +57,8 @@ export default function Learn() {
         setVideosHasMore(!!res.has_more);
       })
       .catch(() => {});
+    // Courses (WP tags with ≥2 posts)
+    api.courses().then(setCourses).catch(() => setCourses([]));
     // Book progress + server sync
     loadProgress();
     bookProgress.syncFromServer().then(() => loadProgress()).catch(() => {});
@@ -101,6 +108,7 @@ export default function Learn() {
         >
           {([
             { id: "books", label: "Bookshelf", icon: "book" as const, count: books?.length ?? 0 },
+            { id: "courses", label: "Courses", icon: "school" as const, count: courses?.length ?? 0 },
             { id: "magazines", label: "Magazines", icon: "newspaper" as const, count: mags?.length ?? 0 },
             { id: "videos", label: "Videos", icon: "play-circle" as const, count: videos?.length ?? 0 },
           ] as { id: Section; label: string; icon: keyof typeof Ionicons.glyphMap; count: number }[]).map((t) => {
@@ -131,6 +139,7 @@ export default function Learn() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brandPrimary} />}
       >
         {tab === "books" && <BooksSection books={books} progressMap={bookProg} />}
+        {tab === "courses" && <CoursesSection courses={courses} completedIds={completedIds} />}
         {tab === "magazines" && <MagazinesSection mags={mags} />}
         {tab === "videos" && (
           <VideosSection
@@ -198,6 +207,122 @@ function MagazinesSection({ mags }: { mags: MagazineT[] | null }) {
           <Text style={styles.cellTitle} numberOfLines={2}>{m.title}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+function CoursesSection({
+  courses,
+  completedIds,
+}: {
+  courses: CourseT[] | null;
+  completedIds: Set<string>;
+}) {
+  if (!courses) return null;
+  if (!courses.length) {
+    return (
+      <ComingSoon
+        icon="school-outline"
+        title="Courses coming soon"
+        subtitle="Tagged article & video series will appear here as guided courses."
+      />
+    );
+  }
+  return (
+    <View style={styles.coursesList}>
+      {courses.map((c) => {
+        const ids = c.lesson_ids || [];
+        const done = ids.filter((id) => completedIds.has(String(id))).length;
+        const pct = ids.length ? Math.round((done / ids.length) * 100) : 0;
+        const finished = ids.length > 0 && done === ids.length;
+        return (
+          <Pressable
+            key={c.id}
+            testID={`learn-course-${c.tag_id}`}
+            onPress={() =>
+              router.push({ pathname: "/course/[id]", params: { id: String(c.tag_id) } })
+            }
+            style={({ pressed }) => [styles.courseCard, pressed && { transform: [{ scale: 0.985 }] }]}
+          >
+            <View style={styles.courseThumb}>
+              {c.image ? (
+                <Image
+                  source={{ uri: c.image }}
+                  style={StyleSheet.absoluteFillObject}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : (
+                <LinearGradient
+                  colors={[colors.brandSecondary, "#6A4A8E"]}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              )}
+              <LinearGradient
+                colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.6)"]}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <View style={styles.coursePill}>
+                <Ionicons name="school" size={12} color="#FFF" />
+                <Text style={styles.coursePillText}>COURSE</Text>
+              </View>
+              {finished ? (
+                <View style={styles.courseDoneBadge}>
+                  <Ionicons name="checkmark" size={13} color="#FFF" />
+                </View>
+              ) : null}
+              <View style={styles.courseThumbFoot}>
+                <Text style={styles.courseThumbTitle} numberOfLines={2}>{c.title}</Text>
+              </View>
+            </View>
+            <View style={styles.courseBody}>
+              {c.description ? (
+                <Text style={styles.courseDesc} numberOfLines={2}>{c.description}</Text>
+              ) : (
+                <Text style={styles.courseDesc} numberOfLines={2}>
+                  {c.lesson_count} guided {c.lesson_count === 1 ? "lesson" : "lessons"} on {c.title.toLowerCase()}.
+                </Text>
+              )}
+              <View style={styles.courseMetaRow}>
+                <View style={styles.courseMetaItem}>
+                  <Ionicons name="albums-outline" size={13} color={colors.brandSecondary} />
+                  <Text style={styles.courseMetaText}>
+                    {c.lesson_count} {c.lesson_count === 1 ? "lesson" : "lessons"}
+                  </Text>
+                </View>
+                {ids.length > 0 ? (
+                  <View style={styles.courseMetaItem}>
+                    <Ionicons
+                      name={finished ? "checkmark-circle" : "trending-up"}
+                      size={13}
+                      color={finished ? (colors.success || "#356646") : colors.brandPrimary}
+                    />
+                    <Text
+                      style={[
+                        styles.courseMetaText,
+                        finished && { color: colors.success || "#356646", fontWeight: "800" },
+                      ]}
+                    >
+                      {finished ? "Complete" : `${done}/${ids.length} done`}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.courseBarTrack}>
+                <View
+                  style={[
+                    styles.courseBarFill,
+                    {
+                      width: `${pct}%`,
+                      backgroundColor: finished ? (colors.success || "#356646") : colors.brandPrimary,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -340,6 +465,72 @@ const styles = StyleSheet.create({
   },
   gridCell: { width: "48%" },
   videoList: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.xl },
+  coursesList: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.lg },
+  courseCard: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    ...shadow.card,
+  },
+  courseThumb: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    backgroundColor: colors.surfaceTertiary,
+  },
+  coursePill: {
+    position: "absolute",
+    top: spacing.md,
+    left: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  coursePillText: { color: "#FFF", fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
+  courseDoneBadge: {
+    position: "absolute",
+    top: spacing.md,
+    right: spacing.md,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.success || "#356646",
+    borderWidth: 2,
+    borderColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  courseThumbFoot: {
+    position: "absolute",
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.md,
+  },
+  courseThumbTitle: {
+    color: "#FFF",
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  courseBody: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: 8 },
+  courseDesc: { fontSize: 13.5, lineHeight: 19, color: colors.muted },
+  courseMetaRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginTop: 2 },
+  courseMetaItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  courseMetaText: { fontSize: 12.5, color: colors.brandSecondary, fontWeight: "700" },
+  courseBarTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.surfaceTertiary,
+    overflow: "hidden",
+    marginTop: 6,
+  },
+  courseBarFill: { height: "100%", borderRadius: 2 },
   videoRow: { width: "100%" },
   videoRowThumb: {
     width: "100%",
