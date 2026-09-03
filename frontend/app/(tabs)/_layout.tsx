@@ -3,21 +3,43 @@ import { Tabs } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Platform, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "@/src/theme";
 
 const TAB_BG = "rgba(255,253,250,0.88)";
 
 function TabBg() {
-  if (Platform.OS === "ios") {
+  // iOS 26+ — use the real liquid-glass primitive
+  if (Platform.OS === "ios" && isLiquidGlassAvailable()) {
     return (
       <View style={StyleSheet.absoluteFillObject}>
-        <BlurView intensity={70} tint="light" style={StyleSheet.absoluteFillObject} />
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,253,250,0.35)" }]} />
-        <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+        <GlassView
+          glassEffectStyle="regular"
+          isInteractive
+          style={[StyleSheet.absoluteFillObject, { borderRadius: 28 }]}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" },
+          ]}
+        />
       </View>
     );
   }
+  // iOS < 26 — best effort with BlurView + warm tint
+  if (Platform.OS === "ios") {
+    return (
+      <View style={StyleSheet.absoluteFillObject}>
+        <BlurView intensity={70} tint="light" style={[StyleSheet.absoluteFillObject, { borderRadius: 28, overflow: "hidden" }]} />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,253,250,0.35)", borderRadius: 28 }]} />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+      </View>
+    );
+  }
+  // Android — solid pill (no free blur that looks good enough)
   return (
     <View style={StyleSheet.absoluteFillObject}>
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG, borderRadius: 28 }]} />
