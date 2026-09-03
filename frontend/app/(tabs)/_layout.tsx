@@ -26,17 +26,13 @@ function TabBg() {
   );
 }
 
-// Centered icon wrapper — the react-navigation tab item still reserves label
-// space even with `tabBarShowLabel: false`, which pushes icons upward. Wrapping
-// in a `flex: 1` centered box + a negative marginBottom compensates for it.
+// Centered icon wrapper. Under expo-router 6 (SDK 54, RN Navigation v6) the
+// tab item still reserved label space even with `tabBarShowLabel: false`.
+// Under expo-router 7 (SDK 57, RN Navigation v7) that placeholder is gone.
 const iconCenter: any = {
   flex: 1,
   alignItems: "center",
   justifyContent: "center",
-  alignSelf: "stretch",
-  width: "100%",
-  height: "100%",
-  marginBottom: -14, // reclaim label placeholder space
 };
 
 function TabIcon({ name, color, size = 24 }: { name: React.ComponentProps<typeof Ionicons>["name"]; color: string; size?: number }) {
