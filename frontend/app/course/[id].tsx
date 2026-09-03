@@ -308,7 +308,7 @@ export default function CourseScreen() {
                           color={colors.muted}
                         />
                         <Text style={styles.lessonMeta}>
-                          {l.type === "video" ? "Video" : "Article"} • {l.reading_time || 3} min
+                          {l.type === "video" ? "Video" : "Article"}
                         </Text>
                       </View>
                     </View>
