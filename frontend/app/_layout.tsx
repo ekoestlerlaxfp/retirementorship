@@ -1,3 +1,9 @@
+// Ensure asset registry is initialised before any Image/expo-image mounts.
+// See https://github.com/expo/expo/issues/31240 — under SDK 55+ with the new
+// architecture, `@react-native/assets-registry` occasionally fails to warm
+// up in time and remote images render blank on Expo Go until this shim is
+// imported at the entry point.
+import "expo-asset";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";

@@ -17,24 +17,25 @@ export function AdvisorCTA({ compact = false, testID = "advisor-cta" }: { compac
         colors={[colors.brandSecondary, "#3A2452", "#6A4A8E"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={styles.decoRing} />
-      <View style={styles.decoRing2} />
-      <View style={styles.content}>
-        <View style={styles.badge}>
-          <Ionicons name="chatbubble-ellipses" size={14} color={colors.onBrandPrimary} />
-          <Text style={styles.badgeText}>1:1 GUIDANCE</Text>
+        style={styles.gradient}
+      >
+        <View style={styles.decoRing} pointerEvents="none" />
+        <View style={styles.decoRing2} pointerEvents="none" />
+        <View style={styles.content}>
+          <View style={styles.badge}>
+            <Ionicons name="chatbubble-ellipses" size={14} color={colors.onBrandPrimary} />
+            <Text style={styles.badgeText}>1:1 GUIDANCE</Text>
+          </View>
+          <Text style={styles.title}>Talk to a retirement advisor</Text>
+          <Text style={styles.subtitle}>
+            Bring your questions. Get answers from a fiduciary planner — no pressure, no sales pitch.
+          </Text>
+          <View style={styles.cta}>
+            <Text style={styles.ctaText}>Book a discovery meeting</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.brandPrimary} />
+          </View>
         </View>
-        <Text style={styles.title}>Talk to a retirement advisor</Text>
-        <Text style={styles.subtitle}>
-          Bring your questions. Get answers from a fiduciary planner — no pressure, no sales pitch.
-        </Text>
-        <View style={styles.cta}>
-          <Text style={styles.ctaText}>Book a discovery meeting</Text>
-          <Ionicons name="arrow-forward" size={18} color={colors.brandPrimary} />
-        </View>
-      </View>
+      </LinearGradient>
     </Pressable>
   );
 }
@@ -48,6 +49,7 @@ const styles = StyleSheet.create({
     ...shadow.hero,
   },
   wrapCompact: { minHeight: 180 },
+  gradient: { flex: 1, minHeight: 220 },
   content: { padding: spacing.xl, gap: spacing.md },
   badge: {
     flexDirection: "row",
