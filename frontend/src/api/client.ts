@@ -62,6 +62,7 @@ export type BookT = {
   cover_gradient?: string[];
   accent?: string;
   chapters?: number;
+  pages?: number;
   reading_time?: number;
   type: "book";
   pdf_url?: string;

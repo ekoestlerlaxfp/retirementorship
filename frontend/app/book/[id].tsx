@@ -167,6 +167,12 @@ export default function BookScreen() {
                 <Text style={styles.metaChipText}>{book.chapters} chapters</Text>
               </View>
             ) : null}
+            {book.pages ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="document-text-outline" size={16} color={colors.brandSecondary} />
+                <Text style={styles.metaChipText}>{book.pages} pages</Text>
+              </View>
+            ) : null}
             {book.reading_time ? (
               <View style={styles.metaChip}>
                 <Ionicons name="time-outline" size={16} color={colors.brandSecondary} />
