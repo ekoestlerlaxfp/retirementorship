@@ -1243,8 +1243,8 @@ async def _course_lessons(tag_id: int) -> list[dict]:
 
 @api_router.get("/courses")
 async def list_courses():
-    """Every WP tag with 2+ posts becomes a Course. Sorted by the date of the
-    earliest lesson (chronological — oldest course lands first)."""
+    """Every WP tag with 2+ posts becomes a Course. Sorted by the most recent
+    lesson activity (most-recently-updated course lands first)."""
     tags = await wp_get("/tags", {"per_page": 100, "orderby": "count", "order": "desc", "hide_empty": True})
     if not isinstance(tags, list):
         return []
@@ -1260,6 +1260,7 @@ async def list_courses():
         })
         lesson_ids: list[str] = []
         first = None
+        latest_ts: str = ""
         if isinstance(stubs, list) and stubs:
             first = transform_post(stubs[0])
             for p in stubs:
@@ -1267,6 +1268,10 @@ async def list_courses():
                     lesson_ids.append(str(p.get("id")))
                 except Exception:
                     pass
+                # Track newest lesson touch — prefer WP `modified`, fall back to `date`.
+                ts = str(p.get("modified") or p.get("date") or "")
+                if ts and ts > latest_ts:
+                    latest_ts = ts
         # If the tag has fewer than 2 *visible* posts, skip — protects against orphaned
         # counts (private / drafted / restricted posts still count in WP).
         if len(lesson_ids) < 2:
@@ -1281,8 +1286,10 @@ async def list_courses():
             "lesson_ids": lesson_ids,
             "image": (first or {}).get("image"),
             "started_at": (first or {}).get("date"),
+            "last_activity_at": latest_ts or None,
         })
-    out.sort(key=lambda c: c.get("started_at") or "9999")
+    # Most recently updated course first.
+    out.sort(key=lambda c: c.get("last_activity_at") or "", reverse=True)
     return out
 
 
