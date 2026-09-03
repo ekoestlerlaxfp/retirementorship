@@ -1241,26 +1241,38 @@ async def _course_lessons(tag_id: int) -> list[dict]:
     return lessons
 
 
+# Long-lived "last good" cache of the courses list. Used to backfill courses
+# that briefly disappear because WordPress rate-limited (429) their per-tag
+# lesson fetch. This makes the Courses tab stable across transient hiccups.
+_courses_last_good: dict = {"data": [], "ts": 0.0}
+
+
 @api_router.get("/courses")
 async def list_courses():
-    """Every WP tag with 2+ posts becomes a Course. Sorted by the most recent
-    lesson activity (most-recently-updated course lands first)."""
+    """Every WP tag with 2+ posts becomes a Course. Sorted by the newest
+    published lesson (most-recent-post-first)."""
     tags = await wp_get("/tags", {"per_page": 100, "orderby": "count", "order": "desc", "hide_empty": True})
     if not isinstance(tags, list):
-        return []
+        return _courses_last_good.get("data") or []
     out: list[dict] = []
-    for t in tags:
+    for idx, t in enumerate(tags):
         count = int(t.get("count") or 0)
         if count < 2:
             continue
-        # Fetch enough lesson stubs to compute progress and pick the earliest.
-        # Bounded to 100 for perf; that covers most WP tags in practice.
-        stubs = await wp_get("/posts", {
-            "tags": t["id"], "per_page": 100, "_embed": 1, "orderby": "date", "order": "asc",
-        })
+        # Small breather between tag fetches — avoids tripping WP's burst
+        # rate-limit which was silently dropping the last course or two.
+        if idx > 0:
+            await asyncio.sleep(0.35)
+        # Fetch lesson stubs. Longer TTL to avoid burning our WP rate-limit
+        # budget re-fetching every 3 min.
+        stubs = await wp_get(
+            "/posts",
+            {"tags": t["id"], "per_page": 100, "_embed": 1, "orderby": "date", "order": "asc"},
+            ttl=900,
+        )
         lesson_ids: list[str] = []
         first = None
-        latest_ts: str = ""
+        newest_date: str = ""
         if isinstance(stubs, list) and stubs:
             first = transform_post(stubs[0])
             for p in stubs:
@@ -1268,12 +1280,10 @@ async def list_courses():
                     lesson_ids.append(str(p.get("id")))
                 except Exception:
                     pass
-                # Track newest lesson touch — prefer WP `modified`, fall back to `date`.
-                ts = str(p.get("modified") or p.get("date") or "")
-                if ts and ts > latest_ts:
-                    latest_ts = ts
-        # If the tag has fewer than 2 *visible* posts, skip — protects against orphaned
-        # counts (private / drafted / restricted posts still count in WP).
+                # Newest *published* post drives the course ordering.
+                pub = str(p.get("date") or "")
+                if pub and pub > newest_date:
+                    newest_date = pub
         if len(lesson_ids) < 2:
             continue
         out.append({
@@ -1286,10 +1296,24 @@ async def list_courses():
             "lesson_ids": lesson_ids,
             "image": (first or {}).get("image"),
             "started_at": (first or {}).get("date"),
-            "last_activity_at": latest_ts or None,
+            "last_activity_at": newest_date or None,
         })
-    # Most recently updated course first.
+
+    # Stale-fallback merge: if a previously-known course didn't appear this
+    # round (typically because WP rate-limited its /posts call), keep the last
+    # good record so the tab doesn't visibly lose courses.
+    prev: list[dict] = _courses_last_good.get("data") or []
+    if prev:
+        seen = {c.get("tag_id") for c in out}
+        for c in prev:
+            if c.get("tag_id") not in seen:
+                out.append(c)
+
+    # Newest published lesson lands the course at the top.
     out.sort(key=lambda c: c.get("last_activity_at") or "", reverse=True)
+
+    _courses_last_good["data"] = out
+    _courses_last_good["ts"] = time.time()
     return out
 
 
