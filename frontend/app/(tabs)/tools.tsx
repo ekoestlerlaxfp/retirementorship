@@ -9,11 +9,19 @@ import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 
 const TOOLS = [
   {
-    id: "compound",
-    name: "Compound Interest Calculator",
-    subtitle: "See how time grows your money.",
-    icon: "trending-up" as const,
-    url: "https://retirementorship.com/compound-interest-calculator/",
+    id: "roth-conversion",
+    name: "Roth Conversion Calculator",
+    subtitle: "Model conversions and long-term tax savings.",
+    icon: "swap-horizontal" as const,
+    url: "https://lacrossefinancialplanning.com/roth-conversion-calculator/",
+    available: true,
+  },
+  {
+    id: "rmd",
+    name: "RMD Calculator",
+    subtitle: "Estimate your required minimum distributions.",
+    icon: "calendar" as const,
+    url: "https://lacrossefinancialplanning.com/rmd-calculator/",
     available: true,
   },
   {
@@ -21,15 +29,7 @@ const TOOLS = [
     name: "Social Security Taxability",
     subtitle: "How much of your benefit is taxed?",
     icon: "shield-checkmark" as const,
-    url: "https://retirementorship.com/social-security-taxability-calculator/",
-    available: true,
-  },
-  {
-    id: "mortgage",
-    name: "Mortgage Calculator",
-    subtitle: "Plan payments and payoff.",
-    icon: "home" as const,
-    url: "https://retirementorship.com/mortgage-calculator/",
+    url: "https://lacrossefinancialplanning.com/social-security-taxability-calculator/",
     available: true,
   },
 ];
