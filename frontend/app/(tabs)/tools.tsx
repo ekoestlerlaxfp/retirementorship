@@ -43,6 +43,7 @@ export default function Tools() {
   const [tab, setTab] = useState<Section>("calculators");
   const [guides, setGuides] = useState<GuideT[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [guideSection, setGuideSection] = useState<string>("All");
 
   const loadGuides = useCallback(async () => {
     try {
@@ -64,6 +65,24 @@ export default function Tools() {
   const openGuide = (g: GuideT) => {
     if (g.pdf_url) router.push({ pathname: "/book/read/[id]", params: { id: String(g.id) } });
   };
+
+  // Distinct section names, preserving first-seen order (matches feed order).
+  const sectionOptions = React.useMemo<string[]>(() => {
+    if (!guides) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const g of guides) {
+      const s = g.section || "Guides";
+      if (!seen.has(s)) { seen.add(s); out.push(s); }
+    }
+    return out;
+  }, [guides]);
+
+  const filteredGuides = React.useMemo<GuideT[] | null>(() => {
+    if (!guides) return null;
+    if (guideSection === "All") return guides;
+    return guides.filter((g) => (g.section || "Guides") === guideSection);
+  }, [guides, guideSection]);
 
   return (
     <View style={styles.root}>
@@ -104,6 +123,32 @@ export default function Tools() {
             );
           })}
         </ScrollView>
+        {tab === "guides" && sectionOptions.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.subPillsRow}
+            style={{ flexGrow: 0 }}
+          >
+            {(["All", ...sectionOptions] as string[]).map((s) => {
+              const active = guideSection === s;
+              const count = s === "All" ? (guides?.length ?? 0) : (guides || []).filter((g) => (g.section || "Guides") === s).length;
+              return (
+                <Pressable
+                  key={s}
+                  testID={`guide-section-${s}`}
+                  onPress={() => setGuideSection(s)}
+                  style={[styles.subPill, active && styles.subPillActive]}
+                >
+                  <Text style={[styles.subPillText, active && styles.subPillTextActive]}>{s}</Text>
+                  <View style={[styles.subCount, active && styles.subCountActive]}>
+                    <Text style={[styles.subCountText, active && { color: colors.brandSecondary }]}>{count}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
       </SafeAreaView>
 
       <ScrollView
@@ -136,7 +181,7 @@ export default function Tools() {
             ))}
           </View>
         ) : (
-          <GuidesSection guides={guides} onOpen={openGuide} />
+          <GuidesSection guides={filteredGuides} onOpen={openGuide} showSectionHeaders={guideSection === "All"} />
         )}
 
         <View style={{ marginTop: spacing.xl }}>
@@ -147,7 +192,7 @@ export default function Tools() {
   );
 }
 
-function GuidesSection({ guides, onOpen }: { guides: GuideT[] | null; onOpen: (g: GuideT) => void }) {
+function GuidesSection({ guides, onOpen, showSectionHeaders = true }: { guides: GuideT[] | null; onOpen: (g: GuideT) => void; showSectionHeaders?: boolean }) {
   if (!guides) return null;
   if (!guides.length) {
     return (
@@ -177,12 +222,14 @@ function GuidesSection({ guides, onOpen }: { guides: GuideT[] | null; onOpen: (g
     <View style={{ paddingTop: spacing.md }}>
       {sections.map((s) => (
         <View key={s.name} style={{ marginTop: spacing.md }}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{s.name}</Text>
-            <Text style={styles.sectionCount}>
-              {s.items.length} {s.items.length === 1 ? "guide" : "guides"}
-            </Text>
-          </View>
+          {showSectionHeaders ? (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{s.name}</Text>
+              <Text style={styles.sectionCount}>
+                {s.items.length} {s.items.length === 1 ? "guide" : "guides"}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.guideList}>
             {s.items.map((g) => (
               <Pressable
@@ -257,6 +304,42 @@ const styles = StyleSheet.create({
   },
   countActive: { backgroundColor: "rgba(255,255,255,0.9)" },
   countText: { fontSize: 11, fontWeight: "800", color: colors.brandSecondary },
+
+  subPillsRow: {
+    paddingHorizontal: spacing.xl,
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+    alignItems: "center",
+  },
+  subPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 32,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 0.5,
+    borderColor: colors.border,
+    flexShrink: 0,
+  },
+  subPillActive: {
+    backgroundColor: colors.brandPrimary,
+    borderColor: colors.brandPrimary,
+  },
+  subPillText: { color: colors.brandSecondary, fontWeight: "700", fontSize: 12.5, letterSpacing: 0.1 },
+  subPillTextActive: { color: colors.onBrandPrimary },
+  subCount: {
+    minWidth: 20,
+    paddingHorizontal: 5,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.brandTertiary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  subCountActive: { backgroundColor: "rgba(255,255,255,0.92)" },
+  subCountText: { fontSize: 10.5, fontWeight: "800", color: colors.brandSecondary },
 
   list: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md },
   tool: {
