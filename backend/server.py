@@ -1587,6 +1587,20 @@ GUIDE_FALLBACK: List[dict] = [
         "pages": 1,
         "type": "guide",
     },
+    {
+        "id": "guide-tax-guide-irmaa-2026",
+        "slug": "tax-guide-irmaa-2026",
+        "section": "Taxes in Retirement",
+        "title": "RM Tax Guide + IRMAA",
+        "subtitle": "Brackets, IRMAA tiers, and every threshold in one place.",
+        "category": "Reference · 2026",
+        "cover_gradient": ["#0F4F3F", "#3F8E76"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/mnp4cjls_2026%20RM%20Tax%20Guide%20IRMAA.pdf",
+        "pages": 2,
+        "type": "guide",
+    },
     # ---- Charitable Giving --------------------------------------------------
     {
         "id": "guide-charitable-strategy-2026",
