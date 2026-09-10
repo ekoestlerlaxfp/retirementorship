@@ -4,7 +4,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image } from "expo-image";
 import { colors, spacing, radius, shadow } from "@/src/theme";
 import { H1, Muted, GoldPill } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
@@ -231,41 +230,38 @@ function GuidesSection({ guides, onOpen, showSectionHeaders = true }: { guides: 
             </View>
           ) : null}
           <View style={styles.guideList}>
-            {s.items.map((g) => (
-              <Pressable
-                key={String(g.id)}
-                testID={`guide-${g.id}`}
-                onPress={() => onOpen(g)}
-                style={({ pressed }) => [styles.guideCard, pressed && { opacity: 0.94 }]}
-              >
-                <View style={styles.guideThumb}>
-                  {g.image ? (
-                    <Image source={{ uri: g.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
-                  ) : (
-                    <LinearGradient
-                      colors={(g.cover_gradient as any) || [colors.brandSecondary, "#6A4A8E"]}
-                      style={StyleSheet.absoluteFillObject}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    />
-                  )}
-                  <View style={styles.guidePill}>
-                    <Ionicons name="document-text" size={11} color="#FFF" />
-                    <Text style={styles.guidePillText}>{(g.category || "GUIDE").toUpperCase()}</Text>
+            {s.items.map((g) => {
+              const cat = (g.category || "GUIDE").toLowerCase();
+              const iconName: React.ComponentProps<typeof Ionicons>["name"] = cat.includes("flowchart")
+                ? "git-branch-outline"
+                : cat.includes("checklist")
+                ? "checkbox-outline"
+                : cat.includes("reference")
+                ? "book-outline"
+                : "document-text-outline";
+              return (
+                <Pressable
+                  key={String(g.id)}
+                  testID={`guide-${g.id}`}
+                  onPress={() => onOpen(g)}
+                  style={({ pressed }) => [styles.guideRow, pressed && { opacity: 0.94, backgroundColor: colors.surfaceTertiary }]}
+                >
+                  <View style={styles.guideIcon}>
+                    <Ionicons name={iconName} size={20} color={colors.brandPrimary} />
                   </View>
-                </View>
-                <View style={styles.guideBody}>
-                  <Text style={styles.guideTitle} numberOfLines={2}>{g.title}</Text>
-                  {g.subtitle ? <Text style={styles.guideSub} numberOfLines={2}>{g.subtitle}</Text> : null}
-                  <View style={styles.guideMetaRow}>
-                    <Ionicons name="download-outline" size={13} color={colors.brandSecondary} />
-                    <Text style={styles.guideMetaText}>
-                      {g.pages ? `${g.pages} pg · PDF` : "PDF"}
-                    </Text>
+                  <View style={{ flex: 1, minHeight: 46, justifyContent: "center" }}>
+                    <Text style={styles.guideTitle} numberOfLines={2}>{g.title}</Text>
+                    {g.subtitle ? <Text style={styles.guideSub} numberOfLines={1}>{g.subtitle}</Text> : null}
+                    <View style={styles.guideMetaRow}>
+                      <Text style={styles.guideCat}>{(g.category || "GUIDE").toUpperCase()}</Text>
+                      <Text style={styles.guideDot}>•</Text>
+                      <Text style={styles.guideMetaText}>{g.pages ? `${g.pages} pg · PDF` : "PDF"}</Text>
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            ))}
+                  <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       ))}
@@ -365,28 +361,28 @@ const styles = StyleSheet.create({
   toolTitle: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
   toolSub: { fontSize: 14, color: colors.muted },
 
-  guideList: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, gap: spacing.lg },
-  sectionHeader: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: 4,
+  guideList: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, gap: 0 },
+  guideRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: colors.onSurface,
-    letterSpacing: -0.5,
-  },
-  sectionCount: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.brandPrimary,
-    letterSpacing: 1.2,
+  guideIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brandTertiary,
+    alignItems: "center",
+    justifyContent: "center",
   },
   guideCard: {
+    // kept for backwards compat / future thumbnail-style variant
     backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.lg,
     overflow: "hidden",
@@ -413,10 +409,32 @@ const styles = StyleSheet.create({
   },
   guidePillText: { color: "#FFF", fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
   guideBody: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: 4 },
-  guideTitle: { fontSize: 17, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.3 },
-  guideSub: { fontSize: 13.5, lineHeight: 19, color: colors.muted },
-  guideMetaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
-  guideMetaText: { fontSize: 12.5, color: colors.brandSecondary, fontWeight: "700" },
+  guideTitle: { fontSize: 15.5, fontWeight: "700", color: colors.onSurface, letterSpacing: -0.2, lineHeight: 20 },
+  guideSub: { fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 2 },
+  guideMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  guideCat: { fontSize: 10, fontWeight: "800", color: colors.brandPrimary, letterSpacing: 1.1 },
+  guideDot: { fontSize: 10, color: colors.muted, marginTop: -1 },
+  guideMetaText: { fontSize: 11.5, color: colors.muted, fontWeight: "700", letterSpacing: 0.2 },
+  sectionHeader: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: 4,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.onSurface,
+    letterSpacing: -0.5,
+  },
+  sectionCount: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.brandPrimary,
+    letterSpacing: 1.2,
+  },
 
   comingWrap: {
     alignItems: "center",
