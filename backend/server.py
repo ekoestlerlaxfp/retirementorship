@@ -1375,6 +1375,20 @@ GUIDE_FALLBACK: List[dict] = [
         "pages": 1,
         "type": "guide",
     },
+    {
+        "id": "guide-traditional-ira-distribution-penalty-free",
+        "slug": "traditional-ira-distribution-penalty-free",
+        "section": "Retirement Income",
+        "title": "Will A Distribution From My Traditional IRA Be Penalty Free?",
+        "subtitle": "Age rules, exceptions, and the 10% penalty escape hatches.",
+        "category": "Flowchart",
+        "cover_gradient": ["#2A1B45", "#7A5AAE"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/c85ai2sp_Will-A-Distribution-From-My-Traditional-IRA-Be-Penalty-Free.pdf",
+        "pages": 1,
+        "type": "guide",
+    },
     # ---- Roth & IRA Decisions -----------------------------------------------
     {
         "id": "guide-should-do-roth-conversion",
