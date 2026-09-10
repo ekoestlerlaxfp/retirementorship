@@ -1051,6 +1051,11 @@ async def get_book(book_id: str):
         if m["id"] == book_id or m["slug"] == book_id:
             # Present as book-shape so the reader UI works uniformly
             return {**m, "author": "RetireMentorship", "chapters": 0, "reading_time": 0, "hero_image": None}
+    # Fall back to guides — flowcharts, checklists, references — so they
+    # also open in the shared PDF reader.
+    for g in GUIDE_FALLBACK:
+        if g["id"] == book_id or g["slug"] == book_id:
+            return {**g, "author": "RetireMentorship", "chapters": 0, "reading_time": 0, "hero_image": None}
     raise HTTPException(status_code=404, detail="Book not found")
 
 
@@ -1229,21 +1234,76 @@ async def get_magazine(mag_id: str):
 # books and magazines. Structure mirrors the magazine schema so the existing
 # /book/read/[id] flow, bookmarks, and history all just work.
 GUIDE_FALLBACK: List[dict] = [
-    # Populated as the client uploads flowchart / tax guide PDFs.
-    # Example shape (kept commented so future edits stay consistent):
-    # {
-    #     "id": "guide-roth-conversion-flowchart",
-    #     "slug": "roth-conversion-flowchart",
-    #     "title": "Should I Do a Roth Conversion?",
-    #     "subtitle": "Decision flowchart",
-    #     "category": "Flowchart",
-    #     "cover_gradient": ["#1F3B6E", "#5A82BA"],
-    #     "accent": "#C5A059",
-    #     "image": None,
-    #     "pdf_url": "https://.../roth-conversion-flowchart.pdf",
-    #     "pages": 1,
-    #     "type": "guide",
-    # },
+    {
+        "id": "guide-issues-before-i-retire-2026",
+        "slug": "issues-before-i-retire-2026",
+        "section": "Preparing for Retirement",
+        "title": "What Issues Should I Consider Before I Retire?",
+        "subtitle": "The must-review checklist before you pull the trigger.",
+        "category": "Checklist · 2026",
+        "cover_gradient": ["#2A1B45", "#5A3D7A"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/gddjpo6i_What-Issues-Should-I-Consider-Before-I-Retire-2026.pdf",
+        "pages": 2,
+        "type": "guide",
+    },
+    {
+        "id": "guide-important-milestones",
+        "slug": "important-milestones",
+        "section": "Preparing for Retirement",
+        "title": "Important Milestones",
+        "subtitle": "Every age-based deadline that moves your plan.",
+        "category": "Reference",
+        "cover_gradient": ["#1F3B6E", "#5A82BA"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/x36e3fuj_Important-Milestones.pdf",
+        "pages": 1,
+        "type": "guide",
+    },
+    {
+        "id": "guide-important-numbers-2026",
+        "slug": "important-numbers-2026",
+        "section": "Preparing for Retirement",
+        "title": "Important Numbers 2026",
+        "subtitle": "The tax brackets, limits, and thresholds that matter.",
+        "category": "Reference · 2026",
+        "cover_gradient": ["#0F4F3F", "#3F8E76"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/62tymsu3_Important-Numbers-2026.pdf",
+        "pages": 2,
+        "type": "guide",
+    },
+    {
+        "id": "guide-issues-end-of-year-2026",
+        "slug": "issues-end-of-year-2026",
+        "section": "Preparing for Retirement",
+        "title": "What Issues Should I Consider Before The End Of The Year?",
+        "subtitle": "Year-end planning moves you don't want to miss.",
+        "category": "Year-End Checklist · 2026",
+        "cover_gradient": ["#7A2E2E", "#B85454"],
+        "accent": "#C5A059",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/c4lchcbc_What-Issues-Should-I-Consider-Before-The-End-Of-The-Year-2026.pdf",
+        "pages": 2,
+        "type": "guide",
+    },
+    {
+        "id": "guide-issues-start-of-year",
+        "slug": "issues-start-of-year",
+        "section": "Preparing for Retirement",
+        "title": "What Issues Should I Consider At The Start Of The Year?",
+        "subtitle": "Kick off a fresh year with a clean planning slate.",
+        "category": "Start-Of-Year Checklist",
+        "cover_gradient": ["#5A3D0F", "#B08E48"],
+        "accent": "#231F20",
+        "image": None,
+        "pdf_url": "https://customer-assets-jt897jd0.emergentagent.net/job_wisdom-edge/artifacts/wgjxc2lp_What-Issues-Should-I-Consider-At-The-Start-Of-The-Year.pdf",
+        "pages": 2,
+        "type": "guide",
+    },
 ]
 
 

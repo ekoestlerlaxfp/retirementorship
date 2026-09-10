@@ -90,6 +90,7 @@ export type GuideT = {
   slug: string;
   title: string;
   subtitle?: string;
+  section?: string;          // group header, e.g. "Preparing for Retirement"
   category?: string;         // "Flowchart" | "Tax Guide" | "Checklist" | ...
   cover_gradient?: string[];
   accent?: string;

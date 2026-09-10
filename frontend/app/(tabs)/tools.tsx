@@ -162,42 +162,65 @@ function GuidesSection({ guides, onOpen }: { guides: GuideT[] | null; onOpen: (g
       </View>
     );
   }
+  // Group by section, preserving first-seen order.
+  const sections: { name: string; items: GuideT[] }[] = [];
+  const byName = new Map<string, GuideT[]>();
+  for (const g of guides) {
+    const key = g.section || "Guides";
+    if (!byName.has(key)) {
+      byName.set(key, []);
+      sections.push({ name: key, items: byName.get(key)! });
+    }
+    byName.get(key)!.push(g);
+  }
   return (
-    <View style={styles.guideList}>
-      {guides.map((g) => (
-        <Pressable
-          key={String(g.id)}
-          testID={`guide-${g.id}`}
-          onPress={() => onOpen(g)}
-          style={({ pressed }) => [styles.guideCard, pressed && { opacity: 0.94 }]}
-        >
-          <View style={styles.guideThumb}>
-            {g.image ? (
-              <Image source={{ uri: g.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
-            ) : (
-              <LinearGradient
-                colors={(g.cover_gradient as any) || [colors.brandSecondary, "#6A4A8E"]}
-                style={StyleSheet.absoluteFillObject}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              />
-            )}
-            <View style={styles.guidePill}>
-              <Ionicons name="document-text" size={11} color="#FFF" />
-              <Text style={styles.guidePillText}>{(g.category || "GUIDE").toUpperCase()}</Text>
-            </View>
+    <View style={{ paddingTop: spacing.md }}>
+      {sections.map((s) => (
+        <View key={s.name} style={{ marginTop: spacing.md }}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{s.name}</Text>
+            <Text style={styles.sectionCount}>
+              {s.items.length} {s.items.length === 1 ? "guide" : "guides"}
+            </Text>
           </View>
-          <View style={styles.guideBody}>
-            <Text style={styles.guideTitle} numberOfLines={2}>{g.title}</Text>
-            {g.subtitle ? <Text style={styles.guideSub} numberOfLines={2}>{g.subtitle}</Text> : null}
-            <View style={styles.guideMetaRow}>
-              <Ionicons name="download-outline" size={13} color={colors.brandSecondary} />
-              <Text style={styles.guideMetaText}>
-                {g.pages ? `${g.pages} pg · PDF` : "PDF"}
-              </Text>
-            </View>
+          <View style={styles.guideList}>
+            {s.items.map((g) => (
+              <Pressable
+                key={String(g.id)}
+                testID={`guide-${g.id}`}
+                onPress={() => onOpen(g)}
+                style={({ pressed }) => [styles.guideCard, pressed && { opacity: 0.94 }]}
+              >
+                <View style={styles.guideThumb}>
+                  {g.image ? (
+                    <Image source={{ uri: g.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+                  ) : (
+                    <LinearGradient
+                      colors={(g.cover_gradient as any) || [colors.brandSecondary, "#6A4A8E"]}
+                      style={StyleSheet.absoluteFillObject}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                  )}
+                  <View style={styles.guidePill}>
+                    <Ionicons name="document-text" size={11} color="#FFF" />
+                    <Text style={styles.guidePillText}>{(g.category || "GUIDE").toUpperCase()}</Text>
+                  </View>
+                </View>
+                <View style={styles.guideBody}>
+                  <Text style={styles.guideTitle} numberOfLines={2}>{g.title}</Text>
+                  {g.subtitle ? <Text style={styles.guideSub} numberOfLines={2}>{g.subtitle}</Text> : null}
+                  <View style={styles.guideMetaRow}>
+                    <Ionicons name="download-outline" size={13} color={colors.brandSecondary} />
+                    <Text style={styles.guideMetaText}>
+                      {g.pages ? `${g.pages} pg · PDF` : "PDF"}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
           </View>
-        </Pressable>
+        </View>
       ))}
     </View>
   );
@@ -259,7 +282,27 @@ const styles = StyleSheet.create({
   toolTitle: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
   toolSub: { fontSize: 14, color: colors.muted },
 
-  guideList: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.lg },
+  guideList: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, gap: spacing.lg },
+  sectionHeader: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: 4,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.onSurface,
+    letterSpacing: -0.5,
+  },
+  sectionCount: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.brandPrimary,
+    letterSpacing: 1.2,
+  },
   guideCard: {
     backgroundColor: colors.surfaceSecondary,
     borderRadius: radius.lg,
