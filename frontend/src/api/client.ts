@@ -85,6 +85,22 @@ export type MagazineT = {
   type: "magazine";
 };
 
+export type GuideT = {
+  id: string | number;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  category?: string;         // "Flowchart" | "Tax Guide" | "Checklist" | ...
+  cover_gradient?: string[];
+  accent?: string;
+  image?: string | null;
+  excerpt?: string;
+  content_html?: string;
+  pdf_url?: string;
+  pages?: number;
+  type: "guide";
+};
+
 export type User = {
   user_id: string;
   email: string;
@@ -225,6 +241,8 @@ export const api = {
   books: () => req<BookT[]>("/books"),
   book: (id: string | number) => req<BookT>(`/books/${id}`),
   magazines: () => req<MagazineT[]>("/magazines"),
+  guides: () => req<GuideT[]>("/guides"),
+  guide: (id: string | number) => req<GuideT>(`/guides/${id}`),
   courses: () => req<CourseT[]>("/courses"),
   course: (tag_id: number) => req<CourseT>(`/courses/${tag_id}`),
   videos: (limit = 12) => req<{ items: WPPost[]; page: number; has_more: boolean }>(`/videos?limit=${limit}`),

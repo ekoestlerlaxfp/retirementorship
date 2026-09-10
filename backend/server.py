@@ -1224,6 +1224,52 @@ async def get_magazine(mag_id: str):
     raise HTTPException(status_code=404, detail="Magazine not found")
 
 
+# ---- Guides (flowcharts, tax guides, etc.) --------------------------------
+# Each guide is a downloadable PDF that opens in the same reader used for
+# books and magazines. Structure mirrors the magazine schema so the existing
+# /book/read/[id] flow, bookmarks, and history all just work.
+GUIDE_FALLBACK: List[dict] = [
+    # Populated as the client uploads flowchart / tax guide PDFs.
+    # Example shape (kept commented so future edits stay consistent):
+    # {
+    #     "id": "guide-roth-conversion-flowchart",
+    #     "slug": "roth-conversion-flowchart",
+    #     "title": "Should I Do a Roth Conversion?",
+    #     "subtitle": "Decision flowchart",
+    #     "category": "Flowchart",
+    #     "cover_gradient": ["#1F3B6E", "#5A82BA"],
+    #     "accent": "#C5A059",
+    #     "image": None,
+    #     "pdf_url": "https://.../roth-conversion-flowchart.pdf",
+    #     "pages": 1,
+    #     "type": "guide",
+    # },
+]
+
+
+@api_router.get("/guides")
+async def list_guides():
+    items = await _fetch_cpt("guide")
+    if not items:
+        items = GUIDE_FALLBACK
+    return items
+
+
+@api_router.get("/guides/{guide_id}")
+async def get_guide(guide_id: str):
+    if guide_id.isdigit():
+        try:
+            data = await wp_get(f"/guide/{guide_id}", {"_embed": 1}, ttl=180)
+            if isinstance(data, dict) and data.get("id"):
+                return _transform_cpt(data, "guide")
+        except Exception:
+            pass
+    for g in GUIDE_FALLBACK:
+        if g["id"] == guide_id or g["slug"] == guide_id:
+            return g
+    raise HTTPException(status_code=404, detail="Guide not found")
+
+
 async def _course_lessons(tag_id: int) -> list[dict]:
     """Return all posts tagged with `tag_id`, oldest first (chronological course order)."""
     lessons: list[dict] = []
