@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  toolIconGrad: { ...StyleSheet.absoluteFillObject },
+  toolIconGrad: { ...StyleSheet.absoluteFill },
   toolTitle: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
   toolSub: { fontSize: 14, color: colors.muted },
 

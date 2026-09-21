@@ -1,7 +1,7 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, type ColorValue } from "react-native";
 import { BlurView } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,16 +13,23 @@ function TabBg() {
   // iOS 26+ — use the real liquid-glass primitive
   if (Platform.OS === "ios" && isLiquidGlassAvailable()) {
     return (
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={StyleSheet.absoluteFill}>
         <GlassView
           glassEffectStyle="regular"
+          colorScheme="light"
+          tintColor="rgba(255,253,250,0.55)"
           isInteractive
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 28 }]}
+          style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
+        />
+        {/* Keep dark artwork from overwhelming the glass and icon contrast. */}
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { borderRadius: 28, backgroundColor: "rgba(255,253,250,0.4)" }]}
         />
         <View
           pointerEvents="none"
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" },
           ]}
         />
@@ -32,18 +39,18 @@ function TabBg() {
   // iOS < 26 — best effort with BlurView + warm tint
   if (Platform.OS === "ios") {
     return (
-      <View style={StyleSheet.absoluteFillObject}>
-        <BlurView intensity={70} tint="light" style={[StyleSheet.absoluteFillObject, { borderRadius: 28, overflow: "hidden" }]} />
-        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,253,250,0.35)", borderRadius: 28 }]} />
-        <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+      <View style={StyleSheet.absoluteFill}>
+        <BlurView intensity={70} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: 28, overflow: "hidden" }]} />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,253,250,0.55)", borderRadius: 28 }]} />
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
       </View>
     );
   }
   // Android — solid pill (no free blur that looks good enough)
   return (
-    <View style={StyleSheet.absoluteFillObject}>
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: TAB_BG, borderRadius: 28 }]} />
-      <View style={[StyleSheet.absoluteFillObject, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
+    <View style={StyleSheet.absoluteFill}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: TAB_BG, borderRadius: 28 }]} />
+      <View style={[StyleSheet.absoluteFill, { borderRadius: 28, borderWidth: 0.5, borderColor: "rgba(197,160,89,0.35)" }]} />
     </View>
   );
 }
@@ -57,7 +64,7 @@ const iconCenter: any = {
   justifyContent: "center",
 };
 
-function TabIcon({ name, color, size = 24 }: { name: React.ComponentProps<typeof Ionicons>["name"]; color: string; size?: number }) {
+function TabIcon({ name, color, size = 24 }: { name: React.ComponentProps<typeof Ionicons>["name"]; color: ColorValue; size?: number }) {
   return (
     <View style={iconCenter}>
       <Ionicons name={name} size={size} color={color} />
@@ -72,7 +79,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.brandSecondary,
-        tabBarInactiveTintColor: colors.muted,
+        tabBarInactiveTintColor: "#514B55",
         tabBarShowLabel: false,
         tabBarLabelStyle: { display: "none" },
         tabBarItemStyle: {
@@ -92,8 +99,9 @@ export default function TabsLayout() {
         },
         tabBarStyle: {
           position: "absolute",
-          left: 16,
-          right: 16,
+          left: 0,
+          right: 0,
+          marginHorizontal: 24,
           bottom: Math.max(16, insets.bottom + 8),
           borderTopWidth: 0,
           borderRadius: 28,

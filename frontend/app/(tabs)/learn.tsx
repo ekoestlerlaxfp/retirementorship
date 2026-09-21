@@ -248,19 +248,19 @@ function CoursesSection({
               {c.image ? (
                 <Image
                   source={{ uri: c.image }}
-                  style={StyleSheet.absoluteFillObject}
+                  style={StyleSheet.absoluteFill}
                   contentFit="cover"
                   transition={200}
                 />
               ) : (
                 <LinearGradient
                   colors={[colors.brandSecondary, "#6A4A8E"]}
-                  style={StyleSheet.absoluteFillObject}
+                  style={StyleSheet.absoluteFill}
                 />
               )}
               <LinearGradient
                 colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.6)"]}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
               />
               <View style={styles.coursePill}>
                 <Ionicons name="school" size={12} color="#FFF" />
@@ -350,11 +350,11 @@ function VideosSection({
         >
           <View style={styles.videoRowThumb}>
             {v.image ? (
-              <Image source={{ uri: v.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+              <Image source={{ uri: v.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
             ) : (
-              <LinearGradient colors={[colors.brandSecondary, "#3A2452"]} style={StyleSheet.absoluteFillObject} />
+              <LinearGradient colors={[colors.brandSecondary, "#3A2452"]} style={StyleSheet.absoluteFill} />
             )}
-            <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]} style={StyleSheet.absoluteFillObject} />
+            <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]} style={StyleSheet.absoluteFill} />
             <View style={styles.playBadge}>
               <Ionicons name="play" size={22} color="#FFF" />
             </View>
@@ -407,7 +407,7 @@ function MockMagazine({ title, tagline, alt = false }: { title: string; tagline:
     <View style={styles.mockCover}>
       <LinearGradient
         colors={alt ? ["#B0793A", "#C5A059"] : [colors.brandSecondary, "#6A4A8E"]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />

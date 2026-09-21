@@ -121,14 +121,14 @@ export default function BookScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }}>
         <View style={styles.headerBg}>
           {book.hero_image ? (
-            <Image source={{ uri: book.hero_image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={300} />
+            <Image source={{ uri: book.hero_image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={300} />
           ) : (
-            <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+            <LinearGradient colors={grad} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
           )}
           <LinearGradient
             colors={book.hero_image ? ["rgba(0,0,0,0.35)", "rgba(0,0,0,0.05)", "rgba(35,31,32,0.55)"] : ["rgba(0,0,0,0)", "rgba(0,0,0,0)"]}
             locations={[0, 0.5, 1]}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           />
           <SafeAreaView edges={["top"]} style={styles.topBar}>
             <Pressable testID="book-back" onPress={() => router.back()} style={styles.iconBtn} hitSlop={12}>
@@ -210,7 +210,7 @@ export default function BookScreen() {
                 <Ionicons name="hourglass-outline" size={20} color={colors.brandSecondary} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.comingSoonTitle}>Full book coming soon</Text>
-                  <Muted>We're publishing this on RetireMentorship. In the meantime, get a 1:1 walk-through.</Muted>
+                  <Muted>We&apos;re publishing this on RetireMentorship. In the meantime, get a 1:1 walk-through.</Muted>
                 </View>
               </View>
             )}

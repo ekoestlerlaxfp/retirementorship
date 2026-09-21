@@ -236,8 +236,8 @@ export default function ArticleScreen() {
           </View>
         ) : post.image ? (
           <View style={styles.heroImgWrap}>
-            <Image source={{ uri: post.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
-            <LinearGradient colors={["transparent", "rgba(35,31,32,0.4)"]} style={StyleSheet.absoluteFillObject} />
+            <Image source={{ uri: post.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+            <LinearGradient colors={["transparent", "rgba(35,31,32,0.4)"]} style={StyleSheet.absoluteFill} />
           </View>
         ) : null}
 

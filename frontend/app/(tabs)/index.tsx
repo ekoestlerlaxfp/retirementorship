@@ -8,12 +8,12 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, spacing, radius, stages, BRAND, shadow } from "@/src/theme";
 import { api, cachedApi, type HomeFeed, type BookT, type MagazineT } from "@/src/api/client";
 import { HeroCard, ArticleCard, TrendingCard, Rail } from "@/src/components/cards";
-import { RetirementTipCard } from "@/src/components/RetirementTipCard";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { CenteredLoader, Muted, EmptyState } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
 import { progress as progressStore, type ProgressEntry, bookProgress, type BookProgress, useCompleted } from "@/src/offline";
 import { Image as ExpoImage } from "expo-image";
+import { RetirementTipCard } from "@/src/components/RetirementTipCard";
 import { BookCover, MagazineCover } from "@/src/components/BookCover";
 
 function formatSyncedAt(ts: number | null): string {
@@ -36,7 +36,7 @@ function ContinueCard({ entry }: { entry: ProgressEntry }) {
     >
       <View style={{ height: 160, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surfaceTertiary, marginBottom: spacing.md }}>
         {entry.image ? (
-          <ExpoImage source={{ uri: entry.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+          <ExpoImage source={{ uri: entry.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
         ) : null}
         <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 4, backgroundColor: "rgba(255,255,255,0.35)" }}>
           <View style={{ width: `${Math.max(6, Math.round(entry.progress * 100))}%`, height: "100%", backgroundColor: colors.brandPrimary }} />

@@ -167,16 +167,16 @@ export default function CourseScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           {course.image ? (
-            <Image source={{ uri: course.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={250} />
+            <Image source={{ uri: course.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={250} />
           ) : (
             <LinearGradient
               colors={[colors.brandSecondary, "#6A4A8E"]}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
             />
           )}
           <LinearGradient
             colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.75)"]}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           />
           <SafeAreaView edges={["top"]} style={{ flex: 1 }}>
             <View style={styles.heroTopRow}>
@@ -284,13 +284,13 @@ export default function CourseScreen() {
                       {l.image ? (
                         <Image
                           source={{ uri: l.image }}
-                          style={StyleSheet.absoluteFillObject}
+                          style={StyleSheet.absoluteFill}
                           contentFit="cover"
                         />
                       ) : (
                         <LinearGradient
                           colors={[colors.brandSecondary, "#6A4A8E"]}
-                          style={StyleSheet.absoluteFillObject}
+                          style={StyleSheet.absoluteFill}
                         />
                       )}
                       {l.type === "video" ? (
