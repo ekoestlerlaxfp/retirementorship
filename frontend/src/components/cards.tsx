@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { router } from "expo-router";
 import { colors, radius, shadow, spacing, type as typo } from "../theme";
@@ -20,15 +19,11 @@ export function HeroCard({ post }: { post: WPPost }) {
       style={({ pressed }) => [styles.hero, pressed && { transform: [{ scale: 0.985 }] }]}
     >
       <Image
+        onError={(event) => console.warn("[RM image]", post.id, event.error)}
         source={{ uri: post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=1200" }}
-        style={StyleSheet.absoluteFillObject}
-        contentFit="cover"
+        style={styles.heroImage}
+        contentFit="contain"
         transition={300}
-      />
-      <LinearGradient
-        colors={["rgba(35,31,32,0)", "rgba(35,31,32,0.35)", "rgba(35,31,32,0.9)"]}
-        locations={[0, 0.55, 1]}
-        style={StyleSheet.absoluteFillObject}
       />
       <View style={styles.heroRing} pointerEvents="none" />
       <View style={styles.heroContent}>
@@ -56,7 +51,8 @@ export function ArticleCard({ post, testID }: { post: WPPost; testID?: string })
     >
       <View style={styles.artImageWrap}>
         <Image
-          source={{ uri: post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=800" }}
+          onError={(event) => console.warn("[RM image]", post.id, event.error)}
+        source={{ uri: post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=800" }}
           style={styles.artImage}
           contentFit="cover"
           transition={200}
@@ -90,31 +86,6 @@ export function TrendingCard({ post, rank }: { post: WPPost; rank: number }) {
           {post.title}
         </Text>
         <Text style={styles.artMeta}>{post.reading_time} min read</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-export function TipCard({ post }: { post: WPPost }) {
-  return (
-    <Pressable
-      testID={`tip-card-${post.id}`}
-      onPress={() => openPost(post)}
-      style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.95 }]}
-    >
-      <View style={styles.tipHead}>
-        <Ionicons name="sunny-outline" size={20} color={colors.brandPrimary} />
-        <Text style={styles.tipLabel}>TODAY'S RETIREMENT TIP</Text>
-      </View>
-      <Text style={styles.tipTitle} numberOfLines={4}>
-        {post.title}
-      </Text>
-      <Text style={styles.tipExcerpt} numberOfLines={3}>
-        {post.excerpt}
-      </Text>
-      <View style={styles.tipCta}>
-        <Text style={styles.tipCtaText}>Read the tip</Text>
-        <Ionicons name="arrow-forward" size={18} color={colors.brandSecondary} />
       </View>
     </Pressable>
   );
@@ -158,12 +129,12 @@ export function Rail<T>({
 const styles = StyleSheet.create({
   hero: {
     marginHorizontal: spacing.xl,
-    height: 440,
     borderRadius: radius.xl,
     overflow: "hidden",
-    backgroundColor: colors.surfaceTertiary,
+    backgroundColor: "#231F20",
     ...shadow.hero,
   },
+  heroImage: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#231F20" },
   heroRing: {
     position: "absolute",
     left: 0, right: 0, top: 0, bottom: 0,
@@ -171,11 +142,11 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: "rgba(197,160,89,0.35)",
   },
-  heroContent: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.xl, gap: spacing.md },
+  heroContent: { padding: spacing.lg, gap: spacing.sm },
   heroTitle: {
     color: "#FFF",
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: "800",
     letterSpacing: -0.6,
   },

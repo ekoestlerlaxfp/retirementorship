@@ -7,7 +7,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, spacing, radius, stages, BRAND, shadow } from "@/src/theme";
 import { api, cachedApi, type HomeFeed, type BookT, type MagazineT } from "@/src/api/client";
-import { HeroCard, ArticleCard, TrendingCard, TipCard, Rail } from "@/src/components/cards";
+import { HeroCard, ArticleCard, TrendingCard, Rail } from "@/src/components/cards";
+import { RetirementTipCard } from "@/src/components/RetirementTipCard";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { CenteredLoader, Muted, EmptyState } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
@@ -181,11 +182,9 @@ export default function Home() {
           </View>
         )}
 
-        {feed.tip && (
-          <View style={{ marginBottom: spacing["2xl"] }}>
-            <TipCard post={feed.tip} />
-          </View>
-        )}
+        <View style={{ marginBottom: spacing["2xl"] }}>
+          <RetirementTipCard />
+        </View>
 
         {books.length > 0 && (
           <Rail

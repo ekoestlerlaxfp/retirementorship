@@ -82,13 +82,13 @@ export function VideoPlayer({ videoId, kind = "youtube", height = 220, width, te
       {poster ? (
         <Image
           source={{ uri: poster }}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           contentFit="cover"
           transition={200}
           onError={() => setThumbFailed(true)}
         />
       ) : (
-        <View style={[StyleSheet.absoluteFillObject, styles.fallbackBg]} />
+        <View style={[StyleSheet.absoluteFill, styles.fallbackBg]} />
       )}
       <View style={styles.dim} pointerEvents="none" />
 
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   },
   fallbackBg: { backgroundColor: "#1A1225" },
   dim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.35)",
   },
   playBtn: {

@@ -65,9 +65,9 @@ export function BookCover({
     >
       <View style={[styles.cover, { width, height, borderRadius: radius.md }]}>
         {book.image ? (
-          <Image source={{ uri: book.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+          <Image onError={(event) => console.warn("[RM image] book", book.id, event.error)} source={{ uri: book.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
         ) : (
-          <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+          <LinearGradient colors={grad} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
         )}
         {!book.image && (
           <>
@@ -114,13 +114,13 @@ export function MagazineCover({
     >
       <View style={[styles.magCover, { width, height, borderRadius: radius.md }]}>
         {mag.image ? (
-          <Image source={{ uri: mag.image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+          <Image onError={(event) => console.warn("[RM image] magazine", mag.id, event.error)} source={{ uri: mag.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
         ) : (
-          <LinearGradient colors={grad} style={StyleSheet.absoluteFillObject} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+          <LinearGradient colors={grad} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
         )}
         {!mag.image ? (
           <>
-            <LinearGradient colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.65)"]} style={[StyleSheet.absoluteFillObject, { pointerEvents: "none" as any }]} />
+            <LinearGradient colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.65)"]} style={[StyleSheet.absoluteFill, { pointerEvents: "none" as any }]} />
             <View style={[styles.textWrap, { pointerEvents: "none" as any }]}>
               <View style={[styles.rule, { backgroundColor: accent, width: 32 }]} />
               <Text style={styles.title} numberOfLines={3}>{mag.title}</Text>
