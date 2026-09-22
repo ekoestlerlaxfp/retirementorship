@@ -135,7 +135,13 @@ export default function Home() {
     return (
       <View style={styles.root}>
         <SafeAreaView edges={["top"]} />
-        <EmptyState title="No content yet" subtitle="Pull down to retry." icon="newspaper-outline" />
+        <EmptyState
+          title="Couldn't reach the library"
+          subtitle="Pull down to retry or tap below."
+          icon="cloud-offline-outline"
+          actionLabel="Try again"
+          onAction={() => { setLoading(true); load(); }}
+        />
       </View>
     );
   }

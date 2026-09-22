@@ -90,6 +90,20 @@ export const cache = {
     if (opts.onCache) opts.onCache(entry ? entry.d : null, entry ? entry.t : null);
     try {
       const fresh = await fetcher();
+      // Guard: never overwrite a populated cache with an empty list/object —
+      // a transient WP outage would otherwise wipe usable content.
+      const looksEmpty =
+        (Array.isArray(fresh) && fresh.length === 0) ||
+        (fresh && typeof fresh === "object" && !Array.isArray(fresh) && Object.keys(fresh as any).length === 0);
+      const hadContent =
+        entry &&
+        ((Array.isArray(entry.d) && entry.d.length > 0) ||
+          (entry.d && typeof entry.d === "object"));
+      if (looksEmpty && hadContent) {
+        // Keep cached content; just notify caller the network responded.
+        if (opts.onFresh) opts.onFresh(entry!.d);
+        return entry!.d;
+      }
       await cache.set(key, fresh, opts.ver);
       if (opts.onFresh) opts.onFresh(fresh);
       return fresh;

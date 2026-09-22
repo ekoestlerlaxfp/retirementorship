@@ -52,7 +52,7 @@ export function ArticleCard({ post, testID }: { post: WPPost; testID?: string })
       <View style={styles.artImageWrap}>
         <Image
           onError={(event) => console.warn("[RM image]", post.id, event.error)}
-        source={{ uri: post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=800" }}
+        source={{ uri: post.thumbnail || post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=800" }}
           style={styles.artImage}
           contentFit="cover"
           transition={200}

@@ -27,6 +27,7 @@ export type WPPost = {
   modified?: string;
   link: string;
   image?: string;
+  thumbnail?: string;         // WP-generated medium/large size; ideal for cards
   image_alt?: string;
   category?: { id: number; name: string; slug: string } | null;
   author?: { name?: string; avatar?: string } | null;
@@ -146,21 +147,51 @@ export const tokenStore = {
   },
 };
 
-async function req<T = any>(path: string, init: RequestInit = {}): Promise<T> {
+async function req<T = any>(path: string, init: RequestInit = {}, opts: { timeoutMs?: number; retries?: number } = {}): Promise<T> {
   const token = await tokenStore.get();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init.headers as any),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${BASE}/api${path}`, { ...init, headers });
-  if (!res.ok) {
-    if (res.status === 401) await tokenStore.clear();
-    throw new Error(`API ${res.status}: ${await res.text()}`);
+  const method = (init.method || "GET").toUpperCase();
+  // Retries are only safe for idempotent verbs. POST/PUT/PATCH/DELETE go once.
+  const maxAttempts = opts.retries ?? (method === "GET" ? 2 : 0);
+  const timeoutMs = opts.timeoutMs ?? 12000;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${BASE}/api${path}`, { ...init, headers, signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        if (res.status === 401) await tokenStore.clear();
+        // 5xx is retryable, 4xx is not.
+        if (res.status >= 500 && attempt < maxAttempts) {
+          lastErr = new Error(`API ${res.status}`);
+          await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`API ${res.status}: ${await res.text()}`);
+      }
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) return (await res.json()) as T;
+      return (await res.text()) as any;
+    } catch (e: any) {
+      clearTimeout(timer);
+      lastErr = e;
+      // Network / timeout errors are retryable for GET.
+      const isAbort = e?.name === "AbortError";
+      const isNet = isAbort || /Network|Failed to fetch|timeout/i.test(String(e?.message || e));
+      if (isNet && attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        continue;
+      }
+      throw e;
+    }
   }
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return (await res.json()) as T;
-  return (await res.text()) as any;
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export const api = {

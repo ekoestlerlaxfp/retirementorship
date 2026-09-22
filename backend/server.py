@@ -30,50 +30,97 @@ app = FastAPI(title="RetireMentorship API")
 api_router = APIRouter(prefix="/api")
 
 # ---- simple in-process cache for WP responses ----
+# Two-tier cache:
+#   * Fresh window (`CACHE_TTL`) — served straight from cache with no revalidation.
+#   * Stale-but-usable window (`STALE_MAX_AGE`) — served instantly, refreshed in
+#     the background.
+#   * Older than that — bypass cache, wait for network, but fall back to stale on error.
+# Single-flight (`_inflight`) collapses duplicate concurrent fetches for the same
+# key so a burst of requests only hits WordPress once.
 _cache: Dict[str, tuple[float, Any]] = {}
-CACHE_TTL = 180  # 3 min — WordPress is the source of truth; keep it fresh
+_inflight: Dict[str, "asyncio.Task[Any]"] = {}
+CACHE_TTL = 180              # 3 min — fresh window
+STALE_MAX_AGE = 60 * 60      # 1 hour — serve stale + revalidate in background
 
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 LEADS_WEBHOOK_URL = os.environ.get("LEADS_WEBHOOK_URL", "")
+
+
+async def _wp_fetch(key: str, path: str, params: Optional[dict]) -> Any:
+    """Actual HTTP fetch (used both directly and by the background revalidator)."""
+    headers = {"User-Agent": "RetireMentorship/1.0 (mobile app)"}
+    async with httpx.AsyncClient(timeout=8.0, headers=headers) as hc:
+        for attempt in range(3):
+            try:
+                r = await hc.get(f"{WP_BASE}{path}", params=params)
+                if r.status_code == 429:
+                    hit = _cache.get(key)
+                    if hit:
+                        _cache[key] = (time.time(), hit[1])
+                        return hit[1]
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                _cache[key] = (time.time(), data)
+                return data
+            except (httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException) as e:
+                if attempt == 2:
+                    logger.warning(f"WP {path} failed: {e}")
+                    hit = _cache.get(key)
+                    if hit:
+                        return hit[1]
+                    return []
+                await asyncio.sleep(0.3 * (attempt + 1))
+            except Exception as e:
+                if attempt == 2:
+                    logger.warning(f"WP {path} error: {e}")
+                    hit = _cache.get(key)
+                    if hit:
+                        return hit[1]
+                    return []
+                await asyncio.sleep(0.3)
+        hit = _cache.get(key)
+        return hit[1] if hit else []
+
+
+def _revalidate_bg(key: str, path: str, params: Optional[dict]) -> None:
+    """Fire-and-forget refresh; drops duplicate in-flight requests."""
+    if key in _inflight and not _inflight[key].done():
+        return
+    async def _run():
+        try:
+            await _wp_fetch(key, path, params)
+        finally:
+            _inflight.pop(key, None)
+    _inflight[key] = asyncio.create_task(_run())
 
 
 async def wp_get(path: str, params: Optional[dict] = None, ttl: int = CACHE_TTL) -> Any:
     key = f"{path}?{sorted((params or {}).items())}"
     now = time.time()
     hit = _cache.get(key)
-    if hit and now - hit[0] < ttl:
-        return hit[1]
-    headers = {"User-Agent": "RetireMentorship/1.0 (mobile app)"}
-    async with httpx.AsyncClient(timeout=20.0, headers=headers) as hc:
-        for attempt in range(3):
-            try:
-                r = await hc.get(f"{WP_BASE}{path}", params=params)
-                if r.status_code == 429:
-                    # rate limited — serve stale if we have any, else backoff
-                    if hit:
-                        _cache[key] = (now, hit[1])
-                        return hit[1]
-                    await asyncio.sleep(1.0 * (attempt + 1))
-                    continue
-                r.raise_for_status()
-                data = r.json()
-                _cache[key] = (now, data)
-                return data
-            except httpx.HTTPStatusError as e:
-                if hit:
-                    return hit[1]
-                if attempt == 2:
-                    logger.warning(f"WP {path} failed: {e}")
-                    return [] if not path.endswith(tuple(f"/{i}" for i in range(10))) else {}
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                if hit:
-                    return hit[1]
-                if attempt == 2:
-                    logger.warning(f"WP {path} error: {e}")
-                    return []
-                await asyncio.sleep(0.5)
-    return []
+    if hit:
+        age = now - hit[0]
+        if age < ttl:
+            # Fresh — hand back straight away.
+            return hit[1]
+        if age < STALE_MAX_AGE:
+            # Stale but usable — hand back immediately, refresh in background.
+            _revalidate_bg(key, path, params)
+            return hit[1]
+    # Miss (or expired past STALE_MAX_AGE): use single-flight to coalesce concurrent misses.
+    if key in _inflight and not _inflight[key].done():
+        try:
+            return await _inflight[key]
+        except Exception:
+            pass
+    task = asyncio.create_task(_wp_fetch(key, path, params))
+    _inflight[key] = task
+    try:
+        return await task
+    finally:
+        _inflight.pop(key, None)
 
 
 # ---- helpers ----
@@ -132,6 +179,15 @@ def transform_post(p: dict) -> dict:
     reading_time = max(1, round(words / 220))
     video_kind, video_id = _extract_video(content_html)
     is_video = video_kind is not None
+    # Pull WP's pre-generated thumbnail sizes so cards can load a small image
+    # instead of the full-resolution original. Falls back gracefully.
+    sizes = ((featured.get("media_details") or {}).get("sizes") or {})
+    thumbnail = (
+        (sizes.get("medium_large") or {}).get("source_url")
+        or (sizes.get("medium") or {}).get("source_url")
+        or (sizes.get("large") or {}).get("source_url")
+        or featured.get("source_url")
+    )
     return {
         "id": p.get("id"),
         "slug": p.get("slug"),
@@ -142,6 +198,7 @@ def transform_post(p: dict) -> dict:
         "modified": p.get("modified"),
         "link": p.get("link"),
         "image": featured.get("source_url"),
+        "thumbnail": thumbnail,
         "image_alt": featured.get("alt_text") or title,
         "category": category,
         "author": {"name": author.get("name"), "avatar": (author.get("avatar_urls") or {}).get("96")},
@@ -721,9 +778,18 @@ async def wp_home_feed(
     - trending: mid-slice of latest, excluding hero/videos
     - recommended: page-2 posts filtered by interest_cat + exclude_ids (viewing history)
     """
-    latest_data = await wp_get(
-        "/posts",
-        {"per_page": 20, "_embed": 1, "orderby": "date", "order": "desc"},
+    # Fetch the latest posts + the deeper-slice recommendations concurrently
+    # instead of one-after-the-other — saves ~1 network round-trip on cold starts.
+    rec_params: Dict[str, Any] = {"per_page": 12, "_embed": 1, "orderby": "date", "order": "desc"}
+    if interest_cat:
+        rec_params["categories"] = interest_cat
+    else:
+        rec_params["page"] = 2  # go one page deeper into WP's archive for freshness without duplication
+
+    latest_data, rec_data = await asyncio.gather(
+        wp_get("/posts", {"per_page": 20, "_embed": 1, "orderby": "date", "order": "desc"}),
+        wp_get("/posts", rec_params, ttl=180),
+        return_exceptions=False,
     )
     if not isinstance(latest_data, list):
         latest_data = []
@@ -767,13 +833,7 @@ async def wp_home_feed(
     for t in trending:
         exclude_set.add(t["id"])
 
-    # Recommended = deeper picks, biased to user interest.
-    rec_params: Dict[str, Any] = {"per_page": 12, "_embed": 1, "orderby": "date", "order": "desc"}
-    if interest_cat:
-        rec_params["categories"] = interest_cat
-    else:
-        rec_params["page"] = 2  # go one page deeper into WP's archive for freshness without duplication
-    rec_data = await wp_get("/posts", rec_params, ttl=180)
+    # Recommended = deeper picks, biased to user interest (fetched in parallel above).
     if not isinstance(rec_data, list):
         rec_data = []
     recommended = [transform_post(p) for p in rec_data if isinstance(p, dict) and p.get("id") not in exclude_set][:8]

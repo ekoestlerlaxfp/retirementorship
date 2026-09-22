@@ -94,11 +94,15 @@ export const EmptyState = ({
   title,
   subtitle,
   testID,
+  actionLabel,
+  onAction,
 }: {
   icon?: React.ComponentProps<typeof Ionicons>["name"];
   title: string;
   subtitle?: string;
   testID?: string;
+  actionLabel?: string;
+  onAction?: () => void;
 }) => (
   <View testID={testID} style={styles.empty}>
     <View style={styles.emptyIconWrap}>
@@ -106,6 +110,15 @@ export const EmptyState = ({
     </View>
     <H3 style={{ textAlign: "center" }}>{title}</H3>
     {subtitle && <Muted style={{ textAlign: "center", marginTop: spacing.sm }}>{subtitle}</Muted>}
+    {actionLabel && onAction ? (
+      <Pressable
+        testID={`${testID || "empty"}-action`}
+        onPress={onAction}
+        style={({ pressed }) => [styles.emptyAction, pressed && { opacity: 0.9 }]}
+      >
+        <Text style={styles.emptyActionText}>{actionLabel}</Text>
+      </Pressable>
+    ) : null}
   </View>
 );
 
@@ -221,5 +234,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: spacing.lg,
   },
+  emptyAction: {
+    marginTop: spacing.xl,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 999,
+    backgroundColor: colors.brandPrimary,
+  },
+  emptyActionText: { color: colors.onBrandPrimary, fontWeight: "800", letterSpacing: 0.2 },
   loader: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
 });
