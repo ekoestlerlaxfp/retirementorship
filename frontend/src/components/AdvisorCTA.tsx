@@ -68,9 +68,8 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: "800",
     letterSpacing: -0.5,
-    maxWidth: 300,
   },
-  subtitle: { color: "#E4D0AB", fontSize: 15, lineHeight: 22, maxWidth: 320 },
+  subtitle: { color: "#E4D0AB", fontSize: 15, lineHeight: 22 },
   cta: {
     flexDirection: "row",
     alignItems: "center",
