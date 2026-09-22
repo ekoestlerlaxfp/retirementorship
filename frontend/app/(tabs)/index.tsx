@@ -82,7 +82,7 @@ export default function Home() {
     const excludeIds = recentProgress.slice(0, 15).map((p) => p.post_id).join(",") || undefined;
 
     // Cache-first, then refresh from WordPress (source of truth)
-    await cachedApi.homeFeed(s, {
+    const homeRequest = cachedApi.homeFeed(s, {
       onCache: (cached, savedAt) => {
         if (cached) { setFeed(cached); setLoading(false); setLastSynced(savedAt); }
       },
@@ -114,6 +114,7 @@ export default function Home() {
     setBookProg(bpMap);
     // Continue Reading rail (local progress)
     setContinueReading(await progressStore.recent(6));
+    await homeRequest;
   }, []);
 
   // Refresh on mount AND whenever the app returns to foreground.

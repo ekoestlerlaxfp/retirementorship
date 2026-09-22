@@ -20,7 +20,7 @@ export function HeroCard({ post }: { post: WPPost }) {
     >
       <Image
         onError={(event) => console.warn("[RM image]", post.id, event.error)}
-        source={{ uri: post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=1200" }}
+        source={{ uri: post.thumbnail || post.image || "https://images.unsplash.com/photo-1611558245524-aff4541a18d2?w=1200" }}
         style={styles.heroImage}
         contentFit="contain"
         transition={300}

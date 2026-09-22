@@ -210,7 +210,7 @@ export default function BookScreen() {
                 <Ionicons name="hourglass-outline" size={20} color={colors.brandSecondary} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.comingSoonTitle}>Full book coming soon</Text>
-                  <Muted>We&apos;re publishing this on RetireMentorship. In the meantime, get a 1:1 walk-through.</Muted>
+                  <Muted>We're publishing this on RetireMentorship. In the meantime, get a 1:1 walk-through.</Muted>
                 </View>
               </View>
             )}

@@ -156,15 +156,14 @@ async function req<T = any>(path: string, init: RequestInit = {}, opts: { timeou
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const method = (init.method || "GET").toUpperCase();
   // Retries are only safe for idempotent verbs. POST/PUT/PATCH/DELETE go once.
-  const maxAttempts = opts.retries ?? (method === "GET" ? 2 : 0);
-  const timeoutMs = opts.timeoutMs ?? 12000;
+  const maxAttempts = opts.retries ?? (method === "GET" ? 1 : 0);
+  const timeoutMs = opts.timeoutMs ?? 8000;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(`${BASE}/api${path}`, { ...init, headers, signal: controller.signal });
-      clearTimeout(timer);
       if (!res.ok) {
         if (res.status === 401) await tokenStore.clear();
         // 5xx is retryable, 4xx is not.
@@ -179,7 +178,6 @@ async function req<T = any>(path: string, init: RequestInit = {}, opts: { timeou
       if (ct.includes("application/json")) return (await res.json()) as T;
       return (await res.text()) as any;
     } catch (e: any) {
-      clearTimeout(timer);
       lastErr = e;
       // Network / timeout errors are retryable for GET.
       const isAbort = e?.name === "AbortError";
@@ -189,6 +187,8 @@ async function req<T = any>(path: string, init: RequestInit = {}, opts: { timeou
         continue;
       }
       throw e;
+    } finally {
+      clearTimeout(timer);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
@@ -296,6 +296,20 @@ const K = {
   videos: () => "videos",
 };
 
+// The home feed already includes full public article bodies. Reuse them when
+// opening a post while its dedicated endpoint refreshes in the background.
+const feedPosts = new Map<number, WPPost>();
+function rememberFeedPosts(feed: HomeFeed) {
+  const posts = [feed.hero, feed.tip, ...feed.featured, ...feed.latest,
+    ...feed.videos, ...feed.trending, ...feed.recommended];
+  for (const post of posts) {
+    if (!post?.id || !post.content_html) continue;
+    feedPosts.delete(post.id);
+    feedPosts.set(post.id, post);
+  }
+  while (feedPosts.size > 100) feedPosts.delete(feedPosts.keys().next().value!);
+}
+
 export const cachedApi = {
   homeFeed(
     stage: string | null | undefined,
@@ -310,7 +324,17 @@ export const cachedApi = {
     return cache.staleWhileRevalidate<HomeFeed>(
       K.homeFeed(stage) + keySuffix,
       () => api.homeFeed({ stage, exclude_ids: opts.exclude_ids, interest_cat: opts.interest_cat }),
-      handlers
+      {
+        ...handlers,
+        onCache: (feed, savedAt) => {
+          if (feed) rememberFeedPosts(feed);
+          handlers.onCache?.(feed, savedAt);
+        },
+        onFresh: (feed) => {
+          rememberFeedPosts(feed);
+          handlers.onFresh?.(feed);
+        },
+      },
     );
   },
   categories(handlers: { onCache?: (d: CategoryT[] | null) => void; onFresh?: (d: CategoryT[]) => void } = {}) {
@@ -332,6 +356,12 @@ export const cachedApi = {
       () => api.post(id),
       {
         ...handlers,
+        onCache: (cached, savedAt) => {
+          const fromFeed = feedPosts.get(id);
+          const useFeed = fromFeed && (!cached ||
+            (fromFeed.modified || "") > (cached.modified || ""));
+          handlers.onCache?.(useFeed ? fromFeed : cached, useFeed ? null : savedAt);
+        },
         onFresh: (fresh) => {
           handlers.onFresh?.(fresh);
           // Compare versions and note if content changed

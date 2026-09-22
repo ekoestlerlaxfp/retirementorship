@@ -94,6 +94,8 @@ export const cache = {
       // a transient WP outage would otherwise wipe usable content.
       const looksEmpty =
         (Array.isArray(fresh) && fresh.length === 0) ||
+        (fresh && typeof fresh === "object" && "hero" in fresh && "latest" in fresh &&
+          !(fresh as any).hero && Array.isArray((fresh as any).latest) && !(fresh as any).latest.length) ||
         (fresh && typeof fresh === "object" && !Array.isArray(fresh) && Object.keys(fresh as any).length === 0);
       const hadContent =
         entry &&
