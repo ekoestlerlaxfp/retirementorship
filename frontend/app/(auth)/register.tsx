@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, spacing, radius, BRAND } from "@/src/theme";
 import { H1, Muted, PrimaryButton } from "@/src/components/ui";
@@ -11,6 +11,7 @@ import { Field } from "./login";
 
 export default function RegisterScreen() {
   const { register } = useAuth();
+  const { next, nextId } = useLocalSearchParams<{ next?: string; nextId?: string }>();
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [email, setEmail] = useState("");
@@ -19,6 +20,19 @@ export default function RegisterScreen() {
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const goAfterAuth = useCallback(() => {
+    if (next && typeof next === "string") {
+      if (router.canGoBack()) {
+        try { router.back(); return; } catch {}
+      }
+      const path = next as any;
+      const params = nextId ? { id: String(nextId) } : undefined;
+      router.replace(params ? { pathname: path, params } : { pathname: path });
+      return;
+    }
+    router.replace("/(tabs)");
+  }, [next, nextId]);
 
   const onSubmit = useCallback(async () => {
     setError(null);
@@ -29,7 +43,7 @@ export default function RegisterScreen() {
     setBusy(true);
     try {
       await register({ first_name: first, last_name: last, email, phone, password });
-      router.replace("/(tabs)");
+      goAfterAuth();
     } catch (e: any) {
       const msg = String(e?.message || "");
       const m = msg.match(/API 4\d\d:\s*(.+)/);
@@ -37,7 +51,7 @@ export default function RegisterScreen() {
       try { const j = JSON.parse(detail); detail = j.detail || detail; } catch {}
       setError(detail);
     } finally { setBusy(false); }
-  }, [first, last, email, phone, password, register]);
+  }, [first, last, email, phone, password, register, goAfterAuth]);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -102,7 +116,15 @@ export default function RegisterScreen() {
 
             <View style={{ alignItems: "center" }}>
               <Muted>Already have an account?</Muted>
-              <Pressable onPress={() => router.replace("/(auth)/login")} style={{ marginTop: 8 }}>
+              <Pressable
+                onPress={() =>
+                  router.replace({
+                    pathname: "/(auth)/login",
+                    params: next ? { next: String(next), nextId: nextId ? String(nextId) : "" } : {},
+                  })
+                }
+                style={{ marginTop: 8 }}
+              >
                 <Text style={styles.linkStrong} testID="reg-go-login">Sign in</Text>
               </Pressable>
             </View>

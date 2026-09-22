@@ -1,0 +1,56 @@
+{
+  "summary": "Free Member Access gate: backend gating is solid (16/16 pytests pass covering /api/books, /api/books/{id}, /api/magazines, /api/magazines/{id}, /api/content/pdf/{id} anon 401 + authed 200 + 404 for unknown, /api/guides still public with pdf_url, /api/wp/home-feed still public). Frontend scenarios 1, 2, 5, 6, 7 pass: gate renders with correct pill/headline/buttons, no bookmark or Start button when signed out; reader deep link redirects to detail; signed-in users see Start Reading and no gate on fresh nav; magazine covers route to /book/mag-* (not /read/); public home + tip + articles work signed-out. HOWEVER scenarios 3 and 4 (return-to-book after login/register from the gate) intermittently FAIL: after the redirect the user IS authenticated (bookmark icon visible, gate removed) and the URL is correct /book/book-3d-retirement-income, but the 'book-start' button never renders (neither AuthGate, nor Start reading, nor Coming soon card). A manual page reload immediately shows book-start. This is a client-side race: book detail does not reliably rehydrate with authed data after router.replace from login/register. Deprecated packages detected: none. React Native style warnings noted ('shadow*' deprecated, props.pointerEvents deprecated) but non-blocking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "app/book/[id].tsx",
+        "issue": "After login/register redirect back to /book/[id] from the AuthGate, the page transitions out of the locked state (gate is removed, header bookmark appears) but the 'Start reading' primary button (testID=book-start) does not render. canRead = !isLocked && !!book.pdf_url — book.pdf_url is not present in the state, indicating book/[id] never picks up the authenticated /api/books/{id} response after the redirect. A hard reload (F5) of the same URL renders book-start correctly, confirming the endpoint is fine and the bug is client-side state. Repro: signed-out → /book/book-3d-retirement-income → tap Sign In (or Create Free Account) → complete auth → land back on /book/book-3d-retirement-income → observe: gate gone, bookmark icon visible, but no reader button. Reference: /app/frontend/app/book/[id].tsx:41-52 (useEffect refetch on [id, user]) and /app/frontend/src/context/auth.tsx (purge caches on sign-in).",
+        "testID": "book-start",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Sign-in/Sign-up from AuthGate returns to book detail",
+        "issue": "Book detail does not reliably refetch/hydrate with pdf_url after auth redirect. User is authed and URL is correct but the reader entry point stays missing until a manual refresh.",
+        "affected_testIDs": ["book-start", "book-gate-primary", "book-gate-secondary"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "global styles",
+        "issue": "Multiple 'shadow*' style props deprecated warnings in console — migrate to boxShadow per Expo/RN web renderer. Reference: multiple components (surface via yoga/react-native-web)."
+      },
+      {
+        "component": "global props",
+        "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents' warning in console — migrate remaining components off the prop form. Reference: unknown component (traceable via react-native-web devtools)."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18_member_gate.py",
+    "/app/test_reports/pytest/iteration18_results.xml"
+  ],
+  "action_items": [
+    "Fix the post-auth return-to-book state hydration in /app/frontend/app/book/[id].tsx so book-start renders without needing a manual reload. Likely fixes: (a) ensure auth context's cache purge for `rm.cache:*` completes BEFORE router.replace so the next fetch has no stale cached anon payload, or (b) invalidate the cachedApi.book(id) entry explicitly in the useEffect when `user` becomes defined and skip onCache in that case, or (c) force `setBook(null)` when user changes and re-fetch to avoid rendering a stale locked book object.",
+    "Optional: migrate 'shadow*' style props to boxShadow and props.pointerEvents to style.pointerEvents to clean up console warnings (non-blocking).",
+    "Consider re-verifying: after fix, tap 'Start reading' post-return and confirm reader (pdf.js) renders."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/book/[id].tsx useEffect keyed on [id, user] uses cachedApi.book which can call onCache with a stale locked payload (locked=true, no pdf_url) and then onFresh with the authed payload; if for any reason onFresh doesn't fire (network hiccup, cache write occurring during navigation, or user object identity flipping twice) the UI is stuck on the locked-shape data. Recommend forcing setBook(null) when user identity changes and skipping the onCache callback in that window.",
+    "/app/backend/server.py _gate_item logic is clean and consistent across list and detail endpoints. /content/pdf/{id} correctly enforces 401 before any lookup and 404 for unknown ids. Allow-list host check is a good extra guard.",
+    "/app/backend/server.py: MAGAZINE_FALLBACK entries include raw customer-assets CDN pdf_url values — even though _gate_item strips them, ensure no code path outside /content/pdf/{id} ever surfaces them (currently OK; keep an eye on any future admin/export routes)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "71% (5/7 scenarios pass; S3 + S4 fail due to post-auth hydration bug)"},
+  "seed_data_creation": "Created several throw-away users via /api/auth/register with emails matching gate-*-<random>@example.com. All are verified=true and idle. Not cleaned up (safe to leave; use them or ignore).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend pytest suite is at /app/backend/tests/test_iteration18_member_gate.py (16 tests, all green). Focus retest on scenarios 3 & 4: signed-out on /book/book-3d-retirement-income, tap AuthGate primary (register) or secondary (sign in), complete the flow, and confirm book-start renders WITHOUT needing a manual page reload. Use fresh registered users each run (rate-limited: 5 failed logins per 15 min).",
+  "rca_of_issue": "RCA: The book detail page reads from cachedApi.book(id) which fires two callbacks — onCache (stale) and onFresh (network). When the user signs in via the gate, the auth context purges `rm.cache:*` and then router.replace()s back to /book/[id]. The book/[id] component's useEffect (deps [id, user]) fires with the new user, but under some timing, onCache still surfaces the pre-purge locked payload (or setBook is called with the locked shape and never re-set with the fresh authed payload). Result: book.pdf_url is undefined → canRead=false → the render falls into the 'Coming soon' or 'no button' branch (depending on `book.pdf_url === ''` vs undefined). Mitigation: In app/book/[id].tsx, when `user` changes, explicitly call `setBook(null)` first, drop the onCache branch during this transient, and rely solely on the fresh network response. Alternatively, in auth.tsx sign-in handler, await cache purge completion before calling router.replace."
+}

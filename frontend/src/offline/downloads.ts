@@ -19,6 +19,7 @@ export type DownloadItem = {
   title: string;
   cover?: string | null;
   remote_url: string;   // origin URL of the binary
+  headers?: Record<string, string>; // optional auth headers for protected URLs
   local_uri?: string;   // file:// path once downloaded
   bytes: number;        // size in bytes (0 until ready)
   status: DownloadStatus;
@@ -115,7 +116,7 @@ export const downloads = {
       const resumable = FileSystem.createDownloadResumable(
         input.remote_url,
         target,
-        {},
+        input.headers ? { headers: input.headers } : {},
         async (p) => {
           const total = p.totalBytesExpectedToWrite || 0;
           const wrote = p.totalBytesWritten || 0;
@@ -177,6 +178,17 @@ export const downloads = {
   async clearAll(): Promise<void> {
     const items = await downloads.list();
     for (const it of items) await downloads.remove(it.id);
+  },
+
+  /** Remove all downloads for the given kinds. Used on sign-out to
+   * purge member-only content (books, magazines) from the device so a
+   * signed-out user cannot bypass the reader gate via a local file. */
+  async clearByKinds(kinds: DownloadKind[]): Promise<void> {
+    const items = await downloads.list();
+    const set = new Set<DownloadKind>(kinds);
+    for (const it of items) {
+      if (set.has(it.kind)) await downloads.remove(it.id);
+    }
   },
 };
 

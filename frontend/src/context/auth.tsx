@@ -1,5 +1,24 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, tokenStore, User } from "../api/client";
+import { cache } from "../offline/cache";
+import { downloads } from "../offline/downloads";
+
+/** Cache keys whose payload changes based on whether the caller is signed
+ * in (books/magazines return preview vs. full member content). Cleared on
+ * every sign-in and sign-out so the next fetch reflects the new state. */
+const MEMBER_CACHE_KEYS = ["books", "magazines"];
+
+async function purgeMemberCaches() {
+  try {
+    // Direct list keys
+    for (const k of MEMBER_CACHE_KEYS) await cache.remove(k);
+    // Individual book/magazine detail entries (`book:<id>`)
+    const keys = await cache.keys();
+    for (const k of keys) {
+      if (k.startsWith("book:")) await cache.remove(k);
+    }
+  } catch {}
+}
 
 type RegisterPayload = {
   first_name: string;
@@ -53,6 +72,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const applySession = useCallback(async (token: string, u: User) => {
     await tokenStore.set(token);
+    // Any cached preview data was fetched anonymously — drop it so the
+    // next request comes back with member-only fields (pdf_url, content).
+    await purgeMemberCaches();
     setUser(u);
     try {
       const mod = await import("../offline/book-progress");
@@ -100,6 +122,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     try { await api.logout(); } catch {}
     await tokenStore.clear();
+    // Immediately re-lock: drop cached member payloads and wipe any
+    // downloaded member PDFs so the local file can't bypass the gate.
+    await purgeMemberCaches();
+    try { await downloads.clearByKinds(["book", "magazine"]); } catch {}
     setUser(null);
   }, []);
 

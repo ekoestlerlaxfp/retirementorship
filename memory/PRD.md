@@ -51,6 +51,17 @@ Compound Interest, Social Security Taxability, Mortgage.
 ## Design system
 Warm cream + gold + deep purple. Radius sm 12 · md 20 · lg 28 · xl 36. Floating pill tab bar. Body 17pt, headline 30pt, letter-spacing -0.6. Reader UI uses charcoal `#231F20` chrome for dedicated reading.
 
+## Member access (Sep 2026)
+Books and magazines require a signed-in account to unlock the reader. Public
+content (articles, videos, calculators, tips, guides) stays fully accessible.
+- **Backend**: `/api/books`, `/api/books/{id}`, `/api/magazines`, `/api/magazines/{id}` accept an optional `Authorization` header. Signed-out callers get preview metadata + `locked: true` and never see `pdf_url` / `content_html`. Signed-in callers receive `pdf_url: /api/content/pdf/<id>` (a member-only proxy) and `locked: false`.
+- **Proxy delivery**: `GET /api/content/pdf/{id}` — Bearer auth required, streams the PDF via httpx from the CDN. Allow-list hosts guard against open-proxy abuse.
+- **Frontend gate**: `src/components/AuthGate.tsx` — polished purple gradient card ("Your next chapter starts here.") with "Create Free Account" + "Sign In" and a dismiss (X). Rendered inline on `/book/[id]` when the item is locked; hides the reader/bookmark/complete controls.
+- **Return-to-book**: login and register accept `next` and `nextId` query params (from the gate) and prefer `router.back()` after auth so the user lands back on the exact detail page.
+- **Sign-out lock**: `signOut` in `src/context/auth.tsx` purges the books/magazines caches and deletes any downloaded book/magazine PDFs from `expo-file-system` so a local file cannot bypass the gate.
+- **Sign-in refresh**: `applySession` purges caches before setting the user; the book detail effect clears its local state on `[id, user]` change and re-fetches so the fresh authed payload always wins.
+- **Known limitation**: source PDFs still live on the public `customer-assets-…` CDN. Anyone who already has the direct URL can retrieve the file. The proxy only guarantees the app never leaks those URLs. Full end-to-end protection needs migrating those PDFs to signed-URL storage.
+
 ## Offline layer
 `src/offline/cache.ts` (staleWhileRevalidate), `progress.ts` (article scroll progress → Continue Reading), `downloads.ts` (expo-file-system registry — used for PDFs), `book-progress.ts` (page-based reading progress + server sync).
 

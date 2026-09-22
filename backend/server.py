@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1086,31 +1086,74 @@ async def _fetch_cpt(cpt: str) -> List[dict]:
     return [_transform_cpt(p, cpt) for p in data]
 
 
+# ---- Member-access gate for books and magazines -------------------------
+# Books and magazines are exclusive member content: signed-out clients get a
+# preview only (title, cover, excerpt, meta). The full text, chapters, and
+# PDF URL are hidden. Authenticated clients get a proxied `pdf_url` that
+# routes through `/api/content/pdf/{id}` so the raw CDN URL never leaves
+# the server.
+_MEMBER_PROTECTED_FIELDS = ("pdf_url", "content_html")
+
+
+def _source_pdf_url(content_id: str) -> Optional[str]:
+    """Look up the original PDF URL for a book or magazine id.
+
+    We keep this server-side only so the raw CDN URL never appears in any
+    public response. Only the authenticated proxy endpoint uses it.
+    """
+    for coll in (BOOK_FALLBACK, MAGAZINE_FALLBACK):
+        for item in coll:
+            if str(item.get("id")) == str(content_id) and item.get("pdf_url"):
+                return item["pdf_url"]
+    return None
+
+
+def _gate_item(item: dict, authed: bool) -> dict:
+    """Strip protected fields for signed-out viewers, or rewrite pdf_url to
+    the proxied endpoint for signed-in viewers.
+    """
+    if not authed:
+        out = {k: v for k, v in item.items() if k not in _MEMBER_PROTECTED_FIELDS}
+        out["locked"] = True
+        return out
+    out = dict(item)
+    if item.get("pdf_url"):
+        # Client-side prepends EXPO_PUBLIC_BACKEND_URL when the URL is relative.
+        out["pdf_url"] = f"/api/content/pdf/{item['id']}"
+    out["locked"] = False
+    return out
+
+
 @api_router.get("/books")
-async def list_books():
+async def list_books(authorization: Optional[str] = Header(None)):
+    user = await get_user_from_token(authorization)
+    authed = user is not None
     items = await _fetch_cpt("book")
     if not items:
         items = BOOK_FALLBACK
-    return items
+    return [_gate_item(b, authed) for b in items]
 
 
 @api_router.get("/books/{book_id}")
-async def get_book(book_id: str):
+async def get_book(book_id: str, authorization: Optional[str] = Header(None)):
+    user = await get_user_from_token(authorization)
+    authed = user is not None
     if book_id.isdigit():
         try:
             data = await wp_get(f"/book/{book_id}", {"_embed": 1}, ttl=180)
             if isinstance(data, dict) and data.get("id"):
-                return _transform_cpt(data, "book")
+                return _gate_item(_transform_cpt(data, "book"), authed)
         except Exception:
             pass
     for b in BOOK_FALLBACK:
         if b["id"] == book_id or b["slug"] == book_id:
-            return b
+            return _gate_item(b, authed)
     # Fall back to magazines so the same reader route works for both
     for m in MAGAZINE_FALLBACK:
         if m["id"] == book_id or m["slug"] == book_id:
             # Present as book-shape so the reader UI works uniformly
-            return {**m, "author": "RetireMentorship", "chapters": 0, "reading_time": 0, "hero_image": None}
+            shaped = {**m, "author": "RetireMentorship", "chapters": 0, "reading_time": 0, "hero_image": None}
+            return _gate_item(shaped, authed)
     # Fall back to guides — flowcharts, checklists, references — so they
     # also open in the shared PDF reader.
     for g in GUIDE_FALLBACK:
@@ -1267,26 +1310,108 @@ MAGAZINE_FALLBACK: List[dict] = [
 
 
 @api_router.get("/magazines")
-async def list_magazines():
+async def list_magazines(authorization: Optional[str] = Header(None)):
+    user = await get_user_from_token(authorization)
+    authed = user is not None
     items = await _fetch_cpt("magazine")
     if not items:
         items = MAGAZINE_FALLBACK
-    return items
+    return [_gate_item(m, authed) for m in items]
 
 
 @api_router.get("/magazines/{mag_id}")
-async def get_magazine(mag_id: str):
+async def get_magazine(mag_id: str, authorization: Optional[str] = Header(None)):
+    user = await get_user_from_token(authorization)
+    authed = user is not None
     if mag_id.isdigit():
         try:
             data = await wp_get(f"/magazine/{mag_id}", {"_embed": 1}, ttl=180)
             if isinstance(data, dict) and data.get("id"):
-                return _transform_cpt(data, "magazine")
+                return _gate_item(_transform_cpt(data, "magazine"), authed)
         except Exception:
             pass
     for m in MAGAZINE_FALLBACK:
         if m["id"] == mag_id or m["slug"] == mag_id:
-            return m
+            return _gate_item(m, authed)
     raise HTTPException(status_code=404, detail="Magazine not found")
+
+
+# ---- Protected member content delivery -----------------------------------
+# The exclusive PDF stream for books and magazines. Requires a valid
+# session. Streams the file from the CDN through the backend so the raw
+# origin URL never appears in any public response and the app cannot open
+# the file without a signed-in user.
+#
+# Known limitation (documented for main agent + user):
+#   The source PDFs still live on the public `customer-assets` CDN. Anyone
+#   who already possesses a direct URL can retrieve the file. This proxy
+#   only guarantees that the URL is never leaked by the RetireMentorship
+#   backend. True end-to-end protection needs migrating the files to a
+#   private bucket with short-lived signed URLs (e.g. S3 pre-signed URLs
+#   or a private R2 bucket).
+_ALLOWED_PDF_HOSTS = (
+    "customer-assets-jt897jd0.emergentagent.net",
+    "customer-assets.emergentagent.com",
+    "retirementorship.com",
+)
+
+
+@api_router.get("/content/pdf/{content_id}")
+async def content_pdf(content_id: str, authorization: Optional[str] = Header(None)):
+    # Explicit auth check — never fall through to the CDN for anonymous
+    # callers.
+    user = await get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in to access this content.")
+    src = _source_pdf_url(content_id)
+    if not src:
+        raise HTTPException(status_code=404, detail="Content not found.")
+    # Basic allow-listing so this endpoint cannot be abused as an open
+    # proxy against arbitrary hosts.
+    try:
+        from urllib.parse import urlparse
+        host = (urlparse(src).hostname or "").lower()
+    except Exception:
+        host = ""
+    if host not in _ALLOWED_PDF_HOSTS:
+        raise HTTPException(status_code=403, detail="Source host not allowed.")
+
+    # Stream the upstream response back to the client.
+    upstream_client = httpx.AsyncClient(timeout=60.0, follow_redirects=True)
+    try:
+        req = upstream_client.build_request("GET", src)
+        upstream = await upstream_client.send(req, stream=True)
+    except Exception as e:
+        await upstream_client.aclose()
+        logger.warning(f"content_pdf upstream error for {content_id}: {e}")
+        raise HTTPException(status_code=502, detail="Upstream error.")
+    if upstream.status_code != 200:
+        try:
+            await upstream.aclose()
+        finally:
+            await upstream_client.aclose()
+        raise HTTPException(status_code=upstream.status_code, detail="Upstream error.")
+
+    ct = upstream.headers.get("content-type", "application/pdf")
+    cl = upstream.headers.get("content-length")
+    headers = {
+        # Force inline so pdf.js can render, but keep a sane filename for downloads.
+        "Content-Disposition": f'inline; filename="{content_id}.pdf"',
+        # These downloads are per-user and should never live in shared caches.
+        "Cache-Control": "private, no-store",
+    }
+    if cl:
+        headers["Content-Length"] = cl
+
+    async def _iter():
+        try:
+            async for chunk in upstream.aiter_bytes(64 * 1024):
+                yield chunk
+        finally:
+            await upstream.aclose()
+            await upstream_client.aclose()
+
+    return StreamingResponse(_iter(), media_type=ct, headers=headers)
 
 
 # ---- Guides (flowcharts, tax guides, etc.) --------------------------------

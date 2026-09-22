@@ -8,6 +8,7 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, radius, shadow, spacing, type as typo, CALENDLY_URL } from "@/src/theme";
 import { api, cachedApi, type BookT } from "@/src/api/client";
 import { BookCover } from "@/src/components/BookCover";
+import { AuthGate, LockedBadge } from "@/src/components/AuthGate";
 import { CenteredLoader, CompletePill, GoldPill, Muted, PrimaryButton, SecondaryButton } from "@/src/components/ui";
 import { AdvisorCTA } from "@/src/components/AdvisorCTA";
 import { bookProgress, type BookProgress, downloads, formatBytes, useCompleted } from "@/src/offline";
@@ -20,8 +21,15 @@ export default function BookScreen() {
   const [progress, setProgress] = useState<BookProgress | null>(null);
   const [downloaded, setDownloaded] = useState<{ ready: boolean; bytes: number } | null>(null);
   const [bookmarked, setBookmarked] = useState(false);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { isComplete, markComplete, unmarkComplete } = useCompleted();
+
+  // Guides (Tools tab) share this route but stay public — anything else
+  // requires a signed-in member to unlock the reader.
+  const kindHint = String(id || "").startsWith("guide-") ? "guide" : "member";
+  // Book comes back with `locked: true` when the current session is signed
+  // out. Guides remain unlocked (they're public content).
+  const isLocked = kindHint === "member" && (!user || book?.locked === true);
 
   const refresh = useCallback(async (bookId: string) => {
     const p = await bookProgress.get(bookId);
@@ -32,6 +40,19 @@ export default function BookScreen() {
 
   useEffect(() => {
     if (!id) return;
+    // Reset local state so we don't render the previous (possibly locked)
+    // payload while the fresh copy is loading. Critical for the flow
+    // where a signed-out visitor taps "Sign In" from the AuthGate and
+    // lands back here as a signed-in member: without this reset the
+    // cached "locked" body lingers and the reader button stays hidden.
+    setBook(null);
+    setProgress(null);
+    setDownloaded(null);
+    setBookmarked(false);
+
+    // Cache-first for the offline path, but always follow up with the
+    // fresh network response so the auth state (locked vs unlocked) is
+    // reconciled after sign-in / sign-out.
     cachedApi.book(id, {
       onCache: (d) => { if (d) { setBook(d); refresh(String(d.id)); } },
       onFresh: (d) => { setBook(d); refresh(String(d.id)); },
@@ -39,7 +60,7 @@ export default function BookScreen() {
     // Pull latest progress from server on view
     bookProgress.syncFromServer().then(() => { if (id) refresh(id); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, user]);
 
   // When we have the book + user, record history and load bookmark state
   useEffect(() => {
@@ -104,13 +125,16 @@ export default function BookScreen() {
     } catch {}
   }, [book, user, isComplete, markComplete, unmarkComplete]);
 
-  if (!book) return <View style={styles.root}><CenteredLoader /></View>;
+  if (!book || authLoading) return <View style={styles.root}><CenteredLoader /></View>;
 
   const grad = (book.cover_gradient && book.cover_gradient.length >= 2 ? book.cover_gradient : ["#4B3166", "#7A5B99"]) as any;
-  const canRead = !!book.pdf_url;
+  const canRead = !isLocked && !!book.pdf_url;
   const pct = progress && progress.total_pages > 0 ? progress.page / progress.total_pages : 0;
 
-  const onRead = () => router.push({ pathname: "/book/read/[id]", params: { id: String(book.id) } });
+  const onRead = () => {
+    if (isLocked) return; // rendered gate handles this state
+    router.push({ pathname: "/book/read/[id]", params: { id: String(book.id) } });
+  };
   const onShare = async () => {
     try { await Share.share({ message: `${book.title} — RetireMentorship`, title: book.title }); } catch {}
   };
@@ -135,26 +159,29 @@ export default function BookScreen() {
               <Ionicons name="chevron-back" size={22} color="#FFF" />
             </Pressable>
             <View style={{ flex: 1 }} />
-            <Pressable testID="book-bookmark" onPress={toggleBookmark} style={styles.iconBtn} hitSlop={12}>
-              <Ionicons
-                name={bookmarked ? "bookmark" : "bookmark-outline"}
-                size={20}
-                color={bookmarked ? "#F0C673" : "#FFF"}
-              />
-            </Pressable>
+            {isLocked ? null : (
+              <Pressable testID="book-bookmark" onPress={toggleBookmark} style={styles.iconBtn} hitSlop={12}>
+                <Ionicons
+                  name={bookmarked ? "bookmark" : "bookmark-outline"}
+                  size={20}
+                  color={bookmarked ? "#F0C673" : "#FFF"}
+                />
+              </Pressable>
+            )}
             <Pressable testID="book-share" onPress={onShare} style={styles.iconBtn} hitSlop={12}>
               <Ionicons name="share-outline" size={20} color="#FFF" />
             </Pressable>
           </SafeAreaView>
           <View style={styles.coverWrap}>
-            <BookCover book={book} width={200} height={286} onPress={onRead} progress={pct} />
+            <BookCover book={book} width={200} height={286} onPress={isLocked ? undefined : onRead} progress={pct} />
           </View>
         </View>
 
         <View style={styles.body}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
             <GoldPill label={String(book.id).startsWith("mag-") ? "Magazine" : "Book"} testID="book-badge" />
-            {isComplete(String(book.id)) ? <CompletePill testID="book-complete-pill" /> : null}
+            {isLocked ? <LockedBadge testID="book-locked-badge" /> : null}
+            {!isLocked && isComplete(String(book.id)) ? <CompletePill testID="book-complete-pill" /> : null}
           </View>
           <Text style={styles.title} testID="book-title">{book.title}</Text>
           {book.subtitle ? <Text style={styles.subtitle}>{book.subtitle}</Text> : null}
@@ -198,7 +225,14 @@ export default function BookScreen() {
           {book.excerpt ? <Text style={styles.excerpt}>{book.excerpt}</Text> : null}
 
           <View style={{ marginTop: spacing["2xl"], gap: spacing.md }}>
-            {canRead ? (
+            {isLocked ? (
+              <AuthGate
+                returnPath="/book/[id]"
+                returnId={String(book.id)}
+                testID="book-gate"
+                onDismiss={() => router.back()}
+              />
+            ) : canRead ? (
               <PrimaryButton
                 testID="book-start"
                 label={progress?.page && progress.page > 1 ? `Continue on page ${progress.page}` : "Start reading"}
@@ -214,13 +248,17 @@ export default function BookScreen() {
                 </View>
               </View>
             )}
-            <SecondaryButton testID="book-talk" label="Talk to a mentor about this" onPress={onTalk} icon="chatbubble-ellipses" />
-            <SecondaryButton
-              testID="book-complete"
-              label={isComplete(String(book.id)) ? "Marked complete — tap to undo" : "Mark as complete"}
-              onPress={onToggleComplete}
-              icon={isComplete(String(book.id)) ? "checkmark-done" : "checkmark-circle-outline"}
-            />
+            {isLocked ? null : (
+              <>
+                <SecondaryButton testID="book-talk" label="Talk to a mentor about this" onPress={onTalk} icon="chatbubble-ellipses" />
+                <SecondaryButton
+                  testID="book-complete"
+                  label={isComplete(String(book.id)) ? "Marked complete — tap to undo" : "Mark as complete"}
+                  onPress={onToggleComplete}
+                  icon={isComplete(String(book.id)) ? "checkmark-done" : "checkmark-circle-outline"}
+                />
+              </>
+            )}
           </View>
         </View>
 

@@ -1,0 +1,41 @@
+{
+  "summary": "Retest of Free Member Access gate scenarios S3, S4, and the newly requested S8. All three PASS. The main-agent fix (setBook(null) + setProgress(null) + setDownloaded(null) + setBookmarked(false) on [id, user] change in /app/frontend/app/book/[id].tsx, plus router.back()-preferred `goAfterAuth` in login.tsx and register.tsx) resolves the post-auth hydration race that failed in iteration_18. Confirmed flow: signed-out on /book/book-3d-retirement-income → gate visible (book-gate-primary + book-gate-secondary) → tap Sign In (S3) or Create Free Account (S4) → complete auth → land back on /book/book-3d-retirement-income with book-start visible and book-gate-primary gone, WITHOUT requiring a manual reload. S8 (new) also passes: after signing in on the book, navigating to Profile (tab-profile), tapping Sign out (profile-signout), and returning to /book/book-3d-retirement-income re-locks the page — book-gate-primary is visible again and book-start is gone. Deprecated packages detected: none. Non-blocking React Native web warnings still present in console (shadow*, props.pointerEvents) — same as iteration_18, out of scope for this retest.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "global styles",
+        "issue": "Persistent 'shadow*' style props deprecated warnings in console — migrate to boxShadow per Expo/RN web renderer. Non-blocking; carried over from iteration_18."
+      },
+      {
+        "component": "global props",
+        "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents' warning in console — migrate remaining components. Non-blocking; carried over from iteration_18."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18_member_gate.py",
+    "/app/test_reports/pytest/iteration18_results.xml"
+  ],
+  "action_items": [
+    "None required for the gate feature itself — S3, S4, and S8 all pass.",
+    "Optional cleanup (non-blocking, out of scope for this retest): migrate 'shadow*' style props → boxShadow and props.pointerEvents → style.pointerEvents on web to silence RN-web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/book/[id].tsx now correctly resets local state (book, progress, downloaded, bookmarked) at the start of the [id, user] useEffect, then refetches via cachedApi.book with both onCache and onFresh callbacks. This guarantees the previous locked payload cannot render after auth transitions. Solid fix.",
+    "/app/frontend/app/(auth)/login.tsx and register.tsx goAfterAuth() now prefers router.back() when canGoBack() so we pop back to the exact detail-screen instance in the stack (avoids stacking duplicates). This also means the parent /book/[id] instance stays mounted and its [id, user] useEffect fires on user change — driving the refetch that renders book-start. Clean, symmetrical between login and register."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (not re-run; previous 16/16 still valid)", "frontend": "100% (S3, S4, S8 all pass; S1/S2/S5/S6/S7 previously passed and were not re-run per request)"},
+  "seed_data_creation": "Registered one throw-away user for S3 (gate-s3-1790091531@example.com / password12345) via curl to http://localhost:8001/api/auth/register before the browser flow. S4 registered a fresh user through the UI (gate-s4-<stamp>@example.com). Both accounts left in place; safe to ignore.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Free Member Access gate is now fully validated end-to-end. Backend pytest suite lives at /app/backend/tests/test_iteration18_member_gate.py (16 tests). If future changes touch app/book/[id].tsx, app/(auth)/login.tsx, app/(auth)/register.tsx, or the AuthGate component, rerun scenarios S3/S4/S8 from iteration_19.json to guard against a regression. Note: EXPO_PUBLIC_BACKEND_URL points at the ingress; when scripting pre-auth users, hit http://localhost:8001/api/auth/register directly to avoid Metro swallowing /api/* on port 3000.",
+  "rca_of_issue": "Fix confirmed. Two coordinated changes eliminated the race: (1) /app/frontend/app/book/[id].tsx now nulls out book/progress/downloaded/bookmarked at the start of the useEffect keyed on [id, user], so cachedApi.book(id).onCache can no longer surface a stale locked payload while the fresh authed response is in flight — the fresh onFresh callback is guaranteed to be the last setState. (2) login.tsx and register.tsx goAfterAuth() now prefer router.back() (falling back to router.replace(next)), which pops the auth screen off the stack and returns to the exact pre-existing /book/[id] instance instead of pushing a new one. That preserves the mounted BookScreen so its [id, user] useEffect fires on the user transition, triggering the refetch that populates book.pdf_url and renders book-start. S8 exercises the reverse: sign-out flips user back to null, the same useEffect fires, and the fresh /api/books/{id} returns locked:true → gate re-appears."
+}

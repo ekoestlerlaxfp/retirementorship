@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, TextInput, ScrollView, Pressable, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { colors, spacing, radius, BRAND } from "@/src/theme";
 import { H1, Muted, PrimaryButton } from "@/src/components/ui";
@@ -10,11 +10,28 @@ import { useAuth } from "@/src/context/auth";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const { next, nextId } = useLocalSearchParams<{ next?: string; nextId?: string }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
+
+  const goAfterAuth = useCallback(() => {
+    if (next && typeof next === "string") {
+      // Preferred: pop the auth screen we pushed on top so we return to
+      // the exact instance of the target screen the user came from
+      // (avoids leaving two copies of the detail page in the stack).
+      if (router.canGoBack()) {
+        try { router.back(); return; } catch {}
+      }
+      const path = next as any;
+      const params = nextId ? { id: String(nextId) } : undefined;
+      router.replace(params ? { pathname: path, params } : { pathname: path });
+      return;
+    }
+    router.replace("/(tabs)");
+  }, [next, nextId]);
 
   const onSubmit = useCallback(async () => {
     setError(null);
@@ -22,7 +39,7 @@ export default function LoginScreen() {
     setBusy(true);
     try {
       await signIn(email, password);
-      router.replace("/(tabs)");
+      goAfterAuth();
     } catch (e: any) {
       const msg = String(e?.message || "");
       const m = msg.match(/API 4\d\d:\s*(.+)/);
@@ -30,7 +47,7 @@ export default function LoginScreen() {
       try { const j = JSON.parse(detail); detail = j.detail || detail; } catch {}
       setError(detail);
     } finally { setBusy(false); }
-  }, [email, password, signIn]);
+  }, [email, password, signIn, goAfterAuth]);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -94,7 +111,15 @@ export default function LoginScreen() {
 
             <View style={{ alignItems: "center" }}>
               <Muted>New to RetireMentorship?</Muted>
-              <Pressable onPress={() => router.replace("/(auth)/register")} style={{ marginTop: 8 }}>
+              <Pressable
+                onPress={() =>
+                  router.replace({
+                    pathname: "/(auth)/register",
+                    params: next ? { next: String(next), nextId: nextId ? String(nextId) : "" } : {},
+                  })
+                }
+                style={{ marginTop: 8 }}
+              >
                 <Text style={styles.linkStrong} testID="login-go-register">Create your free account</Text>
               </Pressable>
             </View>

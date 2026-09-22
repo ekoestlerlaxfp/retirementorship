@@ -7,6 +7,7 @@ import { router } from "expo-router";
 import { colors, radius, shadow, spacing } from "../theme";
 import type { BookT, MagazineT } from "../api/client";
 import { completedStore } from "../offline/completed";
+import { useAuth } from "../context/auth";
 
 const DEFAULT_GRADIENT = ["#4B3166", "#7A5B99"] as const;
 
@@ -14,6 +15,14 @@ function useIsComplete(id: string | number) {
   const [done, setDone] = useState<boolean>(() => completedStore.has(String(id)));
   useEffect(() => completedStore.subscribe((set) => setDone(set.has(String(id)))), [id]);
   return done;
+}
+
+function LockCornerBadge() {
+  return (
+    <View style={badgeStyles.lockWrap} pointerEvents="none">
+      <Ionicons name="lock-closed" size={12} color="#231F20" />
+    </View>
+  );
 }
 
 function CompleteBadge() {
@@ -34,6 +43,23 @@ const badgeStyles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     borderWidth: 2, borderColor: "#FFF",
     shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
+  lockWrap: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFF",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
 });
 
@@ -57,6 +83,11 @@ export function BookCover({
   const go = () => (onPress ? onPress() : router.push({ pathname: "/book/[id]", params: { id: String(book.id) } }));
   const pct = Math.max(0, Math.min(1, progress || 0));
   const done = useIsComplete(book.id);
+  const { user } = useAuth();
+  // Books/magazines are member-only; guides remain public and share the
+  // BookCover component in some places, so key off the id prefix.
+  const isMemberOnly = !String(book.id).startsWith("guide-");
+  const locked = isMemberOnly && !user;
   return (
     <Pressable
       testID={`book-cover-${book.id}`}
@@ -82,12 +113,12 @@ export function BookCover({
             </View>
           </>
         )}
-        {pct > 0 ? (
+        {pct > 0 && !locked ? (
           <View testID={`book-progress-${book.id}`} style={styles.progressTrack} pointerEvents="none">
             <View style={[styles.progressFill, { width: `${Math.max(6, Math.round(pct * 100))}%`, backgroundColor: accent }]} />
           </View>
         ) : null}
-        {done ? <CompleteBadge /> : null}
+        {locked ? <LockCornerBadge /> : done ? <CompleteBadge /> : null}
       </View>
     </Pressable>
   );
@@ -106,10 +137,15 @@ export function MagazineCover({
   const accent = mag.accent || "#FFF";
   const label = mag.issue_label || "ISSUE";
   const done = useIsComplete(mag.id);
+  const { user } = useAuth();
+  const locked = !user;
+  // Always route through the detail page so the AuthGate is honoured for
+  // signed-out viewers. Signed-in members can still tap through instantly.
+  const onTap = () => router.push({ pathname: "/book/[id]", params: { id: String(mag.id) } });
   return (
     <Pressable
       testID={`mag-cover-${mag.id}`}
-      onPress={() => router.push({ pathname: "/book/read/[id]", params: { id: String(mag.id) } })}
+      onPress={onTap}
       style={({ pressed }) => [{ width, height }, pressed && { transform: [{ scale: 0.98 }] }]}
     >
       <View style={[styles.magCover, { width, height, borderRadius: radius.md }]}>
@@ -141,7 +177,7 @@ export function MagazineCover({
             <Text style={styles.magStampText}>EVERGREEN</Text>
           </View>
         ) : null}
-        {done ? <CompleteBadge /> : null}
+        {locked ? <LockCornerBadge /> : done ? <CompleteBadge /> : null}
       </View>
     </Pressable>
   );

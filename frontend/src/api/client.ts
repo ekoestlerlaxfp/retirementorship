@@ -68,6 +68,7 @@ export type BookT = {
   type: "book";
   pdf_url?: string;
   modified?: string;
+  locked?: boolean;
 };
 
 export type MagazineT = {
@@ -84,6 +85,7 @@ export type MagazineT = {
   pdf_url?: string;
   date?: string;
   type: "magazine";
+  locked?: boolean;
 };
 
 export type GuideT = {
@@ -146,6 +148,27 @@ export const tokenStore = {
     } catch {}
   },
 };
+
+/**
+ * Resolve a possibly-relative pdf_url returned by the backend.
+ * The member-access proxy returns `/api/content/pdf/<id>`; older/public
+ * items may include absolute CDN URLs. Both are supported.
+ */
+export function resolvePdfUrl(url?: string | null): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("/api/")) return `${BASE}${url}`;
+  if (url.startsWith("/")) return `${BASE}${url}`;
+  return url;
+}
+
+/** True when this URL requires the caller's bearer session token to load. */
+export function isProtectedPdfUrl(url?: string | null): boolean {
+  if (!url) return false;
+  return url.includes("/api/content/pdf/");
+}
+
+export const BACKEND_BASE = BASE;
 
 async function req<T = any>(path: string, init: RequestInit = {}, opts: { timeoutMs?: number; retries?: number } = {}): Promise<T> {
   const token = await tokenStore.get();

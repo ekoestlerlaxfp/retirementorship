@@ -5,14 +5,16 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { router, useLocalSearchParams } from "expo-router";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { colors, radius, spacing } from "@/src/theme";
-import { api, cachedApi, type BookT } from "@/src/api/client";
+import { api, cachedApi, resolvePdfUrl, isProtectedPdfUrl, tokenStore, type BookT } from "@/src/api/client";
 import { CenteredLoader } from "@/src/components/ui";
 import { CrossWebView } from "@/src/components/CrossWebView";
 import { bookProgress, downloads } from "@/src/offline";
+import { useAuth } from "@/src/context/auth";
 
 // Minimal PDF.js reader. Uses the ES-module build so we can render pages onto
 // canvases in one long scroll and detect the current page via IntersectionObserver.
-function buildHtml(pdfUrl: string, startPage: number): string {
+function buildHtml(pdfUrl: string, startPage: number, authToken: string | null): string {
+  const headerJson = authToken ? JSON.stringify({ Authorization: `Bearer ${authToken}` }) : "null";
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -42,6 +44,7 @@ function buildHtml(pdfUrl: string, startPage: number): string {
   pdfjs.GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@4.5.136/build/pdf.worker.min.mjs";
   const PDF_URL = ${JSON.stringify(pdfUrl)};
   const START_PAGE = ${JSON.stringify(startPage)};
+  const HTTP_HEADERS = ${headerJson};
   const post = (msg) => { try { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e){} };
 
   async function render() {
@@ -50,7 +53,7 @@ function buildHtml(pdfUrl: string, startPage: number): string {
       const container = document.getElementById('pages');
       const status = document.getElementById('status');
       const progress = document.getElementById('progress');
-      const task = pdfjs.getDocument({ url: PDF_URL, disableRange: true, disableStream: true });
+      const task = pdfjs.getDocument(HTTP_HEADERS ? { url: PDF_URL, httpHeaders: HTTP_HEADERS, withCredentials: false, disableRange: true, disableStream: true } : { url: PDF_URL, disableRange: true, disableStream: true });
       const doc = await task.promise;
       loading.remove();
       const total = doc.numPages;
@@ -113,7 +116,31 @@ export default function BookReader() {
   const [total, setTotal] = useState(0);
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [downloadedFrac, setDownloadedFrac] = useState(0);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const lastSave = useRef(0);
+  const { user, loading: authLoading } = useAuth();
+  // Guides are the only public content that ever routes through this
+  // screen — everything else is member-only and must be gated.
+  const isMemberContent = !String(id || "").startsWith("guide-");
+
+  // If a signed-out visitor lands here (deep link, restored history, etc.)
+  // bounce them to the detail screen so the gate is shown.
+  useEffect(() => {
+    if (authLoading) return;
+    if (isMemberContent && !user) {
+      if (id) {
+        router.replace({ pathname: "/book/[id]", params: { id: String(id) } });
+      } else {
+        router.replace("/(auth)/login");
+      }
+    }
+  }, [authLoading, user, id, isMemberContent]);
+
+  // Load the current bearer token so we can attach it to the pdf.js request
+  // and to the offline download.
+  useEffect(() => {
+    tokenStore.get().then((t) => setAuthToken(t || null));
+  }, [user]);
 
   // Fetch book meta + starting page
   useEffect(() => {
@@ -128,7 +155,7 @@ export default function BookReader() {
       const dl = await downloads.get(String(b.id));
       if (dl?.status === "ready" && dl.local_uri) setLocalUri(dl.local_uri);
     })();
-  }, [id]);
+  }, [id, user]);
 
   // Ensure we sync any pending progress on mount
   useEffect(() => {
@@ -139,10 +166,22 @@ export default function BookReader() {
   const pdfUrl = useMemo(() => {
     if (!book) return null;
     // Prefer local file when we have it (offline reads)
-    return localUri || book.pdf_url || null;
+    if (localUri) return localUri;
+    return resolvePdfUrl(book.pdf_url) || null;
   }, [book, localUri]);
 
-  const html = useMemo(() => (pdfUrl ? buildHtml(pdfUrl, startPage) : null), [pdfUrl, startPage]);
+  // Only attach the bearer token when the URL actually needs it (protected
+  // /api/content/pdf/... endpoint). Local files and public URLs don't.
+  const tokenForPdf = useMemo(() => {
+    if (!pdfUrl) return null;
+    if (localUri && pdfUrl === localUri) return null;
+    return isProtectedPdfUrl(pdfUrl) ? authToken : null;
+  }, [pdfUrl, localUri, authToken]);
+
+  const html = useMemo(
+    () => (pdfUrl ? buildHtml(pdfUrl, startPage, tokenForPdf) : null),
+    [pdfUrl, startPage, tokenForPdf]
+  );
 
   const onMessage = useCallback((evt: WebViewMessageEvent) => {
     if (!book) return;
@@ -164,6 +203,8 @@ export default function BookReader() {
 
   const onDownloadForOffline = useCallback(async () => {
     if (!book || !book.pdf_url) return;
+    const remote = resolvePdfUrl(book.pdf_url);
+    if (!remote) return;
     setDownloadedFrac(0);
     const unsub = downloads.subscribe((reg) => {
       const it = reg[String(book.id)];
@@ -175,10 +216,11 @@ export default function BookReader() {
       kind: "book",
       title: book.title,
       cover: book.image,
-      remote_url: book.pdf_url,
+      remote_url: remote,
+      headers: isProtectedPdfUrl(remote) && authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
       version: book.modified || null,
     });
-  }, [book]);
+  }, [book, authToken]);
 
   if (!book || !html) return <View style={styles.root}><CenteredLoader /></View>;
 
