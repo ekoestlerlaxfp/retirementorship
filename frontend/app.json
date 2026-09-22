@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.wisdomedge.kt1jyg",
+      "bundleIdentifier": "app.emergent.wisdomedge4dcc3f61",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -19,7 +19,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.wisdomedge.kt1jyg"
+      "package": "app.emergent.wisdomedge4dcc3f61"
     },
     "web": {
       "bundler": "metro",
