@@ -247,6 +247,8 @@ export const api = {
     }),
   me: () => req<{ user: User }>("/auth/me"),
   logout: () => req("/auth/logout", { method: "POST" }),
+  deleteAccount: () =>
+    req<{ ok: boolean; deleted_user_id: string }>("/auth/account", { method: "DELETE" }),
 
   // WP
   categories: () => req<CategoryT[]>("/wp/categories"),

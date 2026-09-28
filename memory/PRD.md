@@ -51,6 +51,13 @@ Compound Interest, Social Security Taxability, Mortgage.
 ## Design system
 Warm cream + gold + deep purple. Radius sm 12 · md 20 · lg 28 · xl 36. Floating pill tab bar. Body 17pt, headline 30pt, letter-spacing -0.6. Reader UI uses charcoal `#231F20` chrome for dedicated reading.
 
+## App Store readiness (Sep 2026)
+- **Account deletion (Apple 5.1.1(v))**: Backend `DELETE /api/auth/account` purges `users`, `bookmarks`, `history`, `completed`, `book_progress`, `user_sessions`, `password_resets`, `verification_codes` for the caller. Frontend Profile screen surfaces "Delete my account" with a confirmation modal (`delete-confirm-modal`), signs the user out, and routes to Login on success.
+- **Privacy manifest**: `app.json → ios.privacyManifests` declares the four required-reason categories (`UserDefaults CA92.1`, `FileTimestamp C617.1`, `DiskSpace E174.1`, `SystemBootTime 35F9.1`) covering AsyncStorage and expo-file-system usage. `NSPrivacyTracking: false` since no ad or analytics SDKs are integrated.
+- **Legal links**: `theme.ts` exports `PRIVACY_URL`, `TERMS_URL`, `SUPPORT_EMAIL`. Register screen makes "Terms of Use" and "Privacy Policy" tappable; Profile screen shows a footer row with Privacy Policy · Terms of Use · Contact support (mailto).
+- **Demo credentials for App Review**: See `/app/memory/test_credentials.md`.
+
+
 ## Member access (Sep 2026)
 Books and magazines require a signed-in account to unlock the reader. Public
 content (articles, videos, calculators, tips, guides) stays fully accessible.

@@ -34,6 +34,7 @@ type AuthContextT = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   verify: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
@@ -129,9 +130,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  // Apple 5.1.1(v) — in-app account deletion. Purges the user's data on
+  // the backend, revokes their token, and clears any locally cached
+  // member content so nothing lingers on the device.
+  const deleteAccount = useCallback(async () => {
+    try { await api.deleteAccount(); } catch {
+      // If the server refuses (e.g. session already expired) treat as sign-out
+      // rather than leaving the user stranded on a mixed-state screen.
+    }
+    await tokenStore.clear();
+    await purgeMemberCaches();
+    try { await downloads.clearAll(); } catch {}
+    setUser(null);
+  }, []);
+
   const value = useMemo<AuthContextT>(
-    () => ({ user, loading, signIn, signOut, register, verify, resendCode, forgotPassword, resetPassword, refresh, setUser }),
-    [user, loading, signIn, signOut, register, verify, resendCode, forgotPassword, resetPassword, refresh]
+    () => ({ user, loading, signIn, signOut, deleteAccount, register, verify, resendCode, forgotPassword, resetPassword, refresh, setUser }),
+    [user, loading, signIn, signOut, deleteAccount, register, verify, resendCode, forgotPassword, resetPassword, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

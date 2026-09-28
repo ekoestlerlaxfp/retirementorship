@@ -667,6 +667,51 @@ async def auth_logout(authorization: Optional[str] = Header(None)):
     return {"ok": True}
 
 
+# Apple 5.1.1(v) — RetireMentorship supports account creation via
+# email/password so we must offer an in-app account-deletion path that
+# actually removes the user and their personal data server-side.
+@api_router.delete("/auth/account")
+async def auth_delete_account(authorization: Optional[str] = Header(None)):
+    user = await require_user(authorization)
+    user_id = user["user_id"]
+    # Purge every collection keyed to this user_id. Kept in one place so
+    # future user-scoped collections can be added here.
+    try:
+        await db.bookmarks.delete_many({"user_id": user_id})
+    except Exception:
+        pass
+    try:
+        await db.history.delete_many({"user_id": user_id})
+    except Exception:
+        pass
+    try:
+        await db.completed.delete_many({"user_id": user_id})
+    except Exception:
+        pass
+    try:
+        await db.book_progress.delete_many({"user_id": user_id})
+    except Exception:
+        pass
+    try:
+        # Revoke every active session for this user before the account row
+        # goes away so no cached token can outlive the deletion.
+        await db.user_sessions.update_many(
+            {"user_id": user_id, "revoked_at": None},
+            {"$set": {"revoked_at": utcnow()}},
+        )
+    except Exception:
+        pass
+    try:
+        # Verification + password-reset codes both live here (they share the
+        # collection with a `purpose` field of "verify" or "reset").
+        await db.user_verification_codes.delete_many({"user_id": user_id})
+    except Exception:
+        pass
+    # Finally remove the user document itself.
+    await db.users.delete_one({"user_id": user_id})
+    return {"ok": True, "deleted_user_id": user_id}
+
+
 # ---- WP proxy ----
 @api_router.get("/wp/categories")
 async def wp_categories():

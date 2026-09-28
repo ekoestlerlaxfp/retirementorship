@@ -199,9 +199,9 @@ function GuidesSection({ guides, onOpen, showSectionHeaders = true }: { guides: 
         <View style={styles.comingIcon}>
           <Ionicons name="document-text-outline" size={28} color={colors.brandPrimary} />
         </View>
-        <Text style={styles.comingTitle}>Guides coming soon</Text>
+        <Text style={styles.comingTitle}>New guides on the way</Text>
         <Muted style={{ textAlign: "center", marginTop: spacing.sm, maxWidth: 300 }}>
-          Flowcharts, tax guides, and downloadable checklists will land here.
+          Flowcharts, tax guides, and downloadable checklists refresh each month. Pull to refresh in a bit.
         </Muted>
       </View>
     );

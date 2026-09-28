@@ -243,8 +243,8 @@ export default function BookScreen() {
               <View style={styles.comingSoonCard}>
                 <Ionicons name="hourglass-outline" size={20} color={colors.brandSecondary} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.comingSoonTitle}>Full book coming soon</Text>
-                  <Muted>We're publishing this on RetireMentorship. In the meantime, get a 1:1 walk-through.</Muted>
+                  <Text style={styles.comingSoonTitle}>Preview available</Text>
+                  <Muted>The full text is being finalised. In the meantime, get a 1:1 walk-through of the ideas inside.</Muted>
                 </View>
               </View>
             )}

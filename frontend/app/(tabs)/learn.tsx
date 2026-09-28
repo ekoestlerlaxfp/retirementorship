@@ -189,8 +189,8 @@ function MagazinesSection({ mags }: { mags: MagazineT[] | null }) {
       <View style={{ paddingHorizontal: spacing.xl }}>
         <ComingSoon
           icon="newspaper-outline"
-          title="Magazines coming soon"
-          subtitle="Beautifully curated semi-annual issues will land here."
+          title="New magazine issues arrive semi-annually"
+          subtitle="The next issue is being polished. It'll appear here as soon as it's live."
         />
         <View style={styles.mockShelf}>
           <MockMagazine title="ISSUE 01" tagline="Living the retirement you designed" />
@@ -223,8 +223,8 @@ function CoursesSection({
     return (
       <ComingSoon
         icon="school-outline"
-        title="Courses coming soon"
-        subtitle="Tagged article & video series will appear here as guided courses."
+        title="More courses on the way"
+        subtitle="Tagged article and video series are added regularly. Check back after your next visit."
       />
     );
   }

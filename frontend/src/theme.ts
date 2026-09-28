@@ -83,6 +83,13 @@ export const stages = [
 
 export const CALENDLY_URL = "https://calendly.com/flinde/discovery";
 
+// Legal & support links surfaced from Register, Profile, and settings.
+// Point these at published pages on the RetireMentorship WordPress site.
+// The site owner should replace the fallbacks below with the real URLs.
+export const PRIVACY_URL = "https://retirementorship.com/privacy-policy/";
+export const TERMS_URL = "https://retirementorship.com/terms-of-use/";
+export const SUPPORT_EMAIL = "support@retirementorship.com";
+
 export const BRAND = {
   name: "RetireMentorship",
   taglineLine1: "Retire Successfully.",

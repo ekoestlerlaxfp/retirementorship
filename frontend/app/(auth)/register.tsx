@@ -1,10 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import Ionicons from "@react-native-vector-icons/ionicons";
-import { colors, spacing, radius, BRAND } from "@/src/theme";
+import { colors, spacing, radius, BRAND, PRIVACY_URL, TERMS_URL } from "@/src/theme";
 import { H1, Muted, PrimaryButton } from "@/src/components/ui";
 import { useAuth } from "@/src/context/auth";
 import { Field } from "./login";
@@ -109,7 +109,23 @@ export default function RegisterScreen() {
             />
 
             <Text style={styles.legal}>
-              By continuing you agree to the {BRAND.name} terms and privacy policy.
+              By continuing you agree to the {BRAND.name}{" "}
+              <Text
+                testID="reg-terms-link"
+                style={styles.legalLink}
+                onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}
+              >
+                Terms of Use
+              </Text>{" "}
+              and{" "}
+              <Text
+                testID="reg-privacy-link"
+                style={styles.legalLink}
+                onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
+              >
+                Privacy Policy
+              </Text>
+              .
             </Text>
 
             <View style={styles.divider} />
@@ -149,6 +165,7 @@ const styles = StyleSheet.create({
   form: { gap: spacing.md },
   error: { color: "#B03030", fontWeight: "600", marginTop: 4 },
   legal: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: spacing.md },
+  legalLink: { color: colors.brandSecondary, fontWeight: "700", textDecorationLine: "underline" },
   divider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.xl },
   linkStrong: { color: colors.brandPrimary, fontWeight: "800", fontSize: 15 },
 });

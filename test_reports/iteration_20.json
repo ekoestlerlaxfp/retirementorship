@@ -1,0 +1,38 @@
+{
+  "summary": "App Store readiness regression pass — backend (6/6) + frontend UI wiring for in-app account deletion (Apple 5.1.1(v)) all pass. Backend covered: register→session_token+user, DELETE /api/auth/account 401 anon + 200 auth with deleted_user_id, post-delete login → 401 (session revoked, user gone, token dead), /api/books anonymous still returns locked items with no pdf_url, /api/wp/home-feed non-empty, /api/guides public with pdf_url, and full data-purge lifecycle (bookmark → delete account → re-register same email → new user_id, bookmarks empty). Frontend (mobile viewport 390×844): profile-delete-account / profile-privacy / profile-terms / profile-support all render on Profile when signed in; tapping profile-delete-account opens delete-confirm-modal containing delete-confirm-button + delete-cancel-button; tapping delete-cancel-button closes the modal without navigating away; /register screen exposes reg-terms-link + reg-privacy-link. The destructive confirm button was NOT tapped per instructions. WP home-feed cold-started empty once, retried and returned hero+8 videos+8 trending (test now retries).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style deprecation", "issue": "Console warns: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Non-blocking but should be migrated. Reference: repo-wide styles (multiple screens)."},
+      {"component": "props.pointerEvents deprecation", "issue": "Console warns: 'props.pointerEvents is deprecated. Use style.pointerEvents' — likely inside a Modal/View. Reference: /app/frontend/app/(tabs)/profile.tsx or a UI component used from it."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration20_account_delete.py",
+    "/app/test_reports/pytest/iteration20_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Migrate legacy shadow* RN style props to boxShadow to silence RN Web deprecation warnings.",
+    "(Optional) Replace `pointerEvents` prop with `style={{ pointerEvents: ... }}` per RN 0.74+ guidance."
+  ],
+  "critical_code_review_comments": [
+    "DELETE /api/auth/account purges bookmarks, history, completed, book_progress, password_resets, verification_codes and revokes active sessions — good coverage. Note: the deletion code refers to `db.verification_codes` and `db.password_resets`, whereas the app actually writes to `db.user_verification_codes` (see _send_verification / _send_reset). Codes stored during the deleted account's lifetime will therefore NOT be purged. Low severity (codes expire in 10 min and are per-user_id), but recommend fixing the collection name to `user_verification_codes` for parity.",
+    "server.py exceeds 700 lines (~1600+). Splitting auth, user data, and content modules into separate files would improve maintainability.",
+    "Public /books, /magazines endpoints correctly omit pdf_url and set locked:true for anon; regression verified."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration20_account_delete.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Test suite creates TEST_-prefixed users via /api/auth/register and cleans up via /api/auth/account. One-off UI user (TEST_ui_19cac6d60d@example.com) was also cleaned up after Playwright run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test lives at /app/backend/tests/test_iteration20_account_delete.py — reusable regression for account deletion + gated content. Home-feed test retries up to 3× to absorb WP cold-start empties. Frontend UI wiring is stable at testIDs listed in review request; do not tap delete-confirm-button in tests as it will delete the signed-in test user.",
+  "rca_of_issue": "N/A — no bugs found. Only minor RN Web deprecation warnings and a small collection-name mismatch (`verification_codes` vs `user_verification_codes`) in the account-delete purge; not user-facing."
+}
